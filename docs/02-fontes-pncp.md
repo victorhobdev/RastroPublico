@@ -1,8 +1,8 @@
-# RastroPublico — fontes e contrato preliminar do PNCP
+# RastroPublico — fontes oficiais e contratos preliminares
 
 ## 1. Objetivo
 
-Registrar o que foi confirmado na documentação oficial, separar documentação de comportamento observado e definir o protocolo de validação antes da implementação.
+Registrar o que foi confirmado nas fontes oficiais, separar documentação de comportamento observado e definir o protocolo de validação antes da implementação.
 
 Nenhum campo, endpoint ou limite deste documento deve ser tratado como contrato definitivo sem uma chamada controlada e uma amostra preservada na Bronze.
 
@@ -12,8 +12,46 @@ Nenhum campo, endpoint ou limite deste documento deve ser tratado como contrato 
 - [Manual de Integração do PNCP v2.5](https://pncp.gov.br/manual/pt-br/latest/singlehtml/)
 - [Histórico de versões do manual](https://pncp.gov.br/manual/pt-br/latest/historico_de_versoes/)
 - [Entidades de domínio do PNCP](https://pncp.gov.br/app/entidades-dominio)
+- [Portal de Dados Abertos do Compras.gov](https://www.gov.br/compras/pt-br/cidadao/portal-de-dados-abertos/portal-de-dados-abertos)
+- [Repositório CSV do Compras.gov](https://repositorio.dados.gov.br/seges/comprasgov/)
+- [Repositório CSV do Comprasnet Contratos](https://repositorio.dados.gov.br/seges/comprasnet_contratos/)
 
 Consulta realizada em 17/07/2026. A versão e o conteúdo devem ser verificados novamente no início de cada fase que altere o contrato de ingestão.
+
+### 2.1 Fontes aprovadas e função
+
+| Fonte | Papel aprovado | Uso inicial | Limite |
+| --- | --- | --- | --- |
+| PNCP API de Consulta | canal canônico nacional planejado | monitoramento e reconciliação quando disponível | consulta de contratações indisponível no Bloco 2 |
+| Compras.gov CSV | fonte transacional ativa | contratações, itens e resultados; bootstrap e incremental | cobertura deve ser medida, não presumida equivalente ao PNCP inteiro |
+| Comprasnet Contratos CSV | fonte contratual ativa | contratos, itens e históricos | vínculo com a contratação não é explícito em todas as linhas |
+| CNPJ/QSA | enriquecimento cadastral | identidade, razão social e quadro societário com data de referência | não substitui o fornecedor publicado na contratação |
+| IBGE Geociências | dimensão geográfica | códigos e hierarquias territoriais | divergências de código seguem para qualidade |
+| IPCA/IBGE | deflator analítico | valor real em série separada do valor nominal | não corrige comparabilidade de item |
+| CEIS/CNEP | contexto correcional | presença cadastral datada e rastreável | não é indicador de fraude, irregularidade ou risco |
+
+Portal da Transparência fica aprovado somente para reconciliação federal. SIAFI, DOU, TCU e TCEs/TCMs exigem pergunta e gate próprios antes de qualquer ingestão. As demais bases avaliadas não pertencem ao escopo atual.
+
+### 2.2 Evidência dos arquivos Compras.gov e Comprasnet
+
+Probes locais em 17/07/2026, armazenados fora do Git em `D:\RastroPublico\data\source-probes`, confirmaram:
+
+| Recorte | Entidade | Linhas | Bytes | Observação |
+| --- | --- | ---: | ---: | --- |
+| diário | compras | 1.531 | 1.609.052 | 27 UFs, CNPJ e controle PNCP completos |
+| diário | itens de compra | 40.969 | 24.445.232 | 24.334 chaves de item distintas; expansão por resultado exige grão composto |
+| diário | resultados | 8.611 | 3.294.989 | identificador e nome do fornecedor completos na amostra |
+| diário | contratos | 1.344 | 978.651 | chave `id` única |
+| diário | itens contratuais | 2.243 | 777.755 | 53 referências sem pai no mesmo arquivo diário |
+| diário | históricos contratuais | 2.236 | 1.737.416 | 30 referências sem pai no mesmo arquivo diário |
+| mensal | compras | 13.870 | 14.533.015 | 13.864 `id_compra` distintos; seis repetições observadas |
+| mensal | itens de compra | 502.945 | 295.385.144 | 206.023 `id_compra_item` distintos; grão físico não é um item único |
+| mensal | resultados | 89.563 | 34.218.110 | chave técnica observada sem repetição |
+| mensal | contratos | 12.254 | 8.560.912 | cobertura federal, estadual e municipal observada |
+| mensal | itens contratuais | 24.252 | 7.622.550 | 269 referências sem pai no recorte mensal |
+| mensal | históricos contratuais | 19.684 | 15.119.700 | uma referência sem pai no recorte mensal |
+
+Os arquivos diário e mensal são recortes de publicação/atualização, não snapshots referencialmente fechados. Ausência do pai no mesmo arquivo não autoriza quarentena definitiva: primeiro deve ocorrer reconciliação contra o histórico Silver. O bootstrap usa arquivos anuais por período; arquivos diários formam o incremental; arquivos mensais servem à reconciliação e ao reprocessamento delimitado.
 
 ## 3. Distinção entre APIs
 

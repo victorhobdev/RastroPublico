@@ -3,7 +3,7 @@
 ## 1. Estado do documento
 
 - **Status:** baseline revisada após parecer externo e reanálise interna.
-- **Versão:** 1.2.
+- **Versão:** 1.3.
 - **Data-base:** 17 de julho de 2026.
 - **Fonte de contexto profissional:** `inventario-competencias-evidencias.md`.
 - **Escopo deste documento:** problema, público, perguntas, limites e critérios de sucesso.
@@ -96,11 +96,13 @@ O núcleo técnico será Spark + PySpark + Databricks + Delta Lake. Airflow, dbt
 
 ### 6.1 Escopo-alvo
 
-- **abrangência:** nacional;
+- **abrangência:** nacional onde comprovada pela fonte; cobertura por sistema, esfera e geografia sempre publicada;
 - **janela:** janela móvel de 12 meses encerrada em D-1;
-- **modalidades:** todas as modalidades ativas e consultáveis no PNCP;
+- **modalidades:** todas as modalidades presentes nos canais oficiais selecionados, preservando o domínio e a identificação de origem;
 - **domínio:** equipamentos e serviços de tecnologia;
 - **entidades:** contratações, itens, resultados, órgãos, unidades, fornecedores, contratos, termos e eventos contratuais disponíveis;
+- **fontes transacionais:** PNCP e arquivos oficiais Compras.gov/Comprasnet Contratos, tratados como canais distintos até reconciliação;
+- **enriquecimentos aprovados:** CNPJ/QSA, IBGE Geociências, IPCA e CEIS/CNEP, cada um com finalidade e cobertura próprias;
 - **processamento:** batch diário;
 - **plataforma principal:** Databricks Free;
 - **desenvolvimento:** módulos Python testáveis localmente e execução Spark/Delta no Databricks;
@@ -157,6 +159,8 @@ Equipamentos entram primeiro na calibração porque oferecem melhor chance de un
 - mensageria, microsserviços ou infraestrutura como código;
 - garantia de serviço, SLA comercial ou operação crítica.
 
+Também ficam fora integrações sem pergunta analítica aprovada. Portal da Transparência e SIAFI podem servir à reconciliação federal; DOU, TCU e TCEs/TCMs podem apoiar investigação externa. Eles não entram como ingestões permanentes na versão 1 sem um gate específico. Bases eleitorais, financeiras, sanitárias, educacionais, ambientais e regulatórias permanecem fora do produto.
+
 ## 8. Atributos de qualidade
 
 | Prioridade | Atributo | Requisito inicial |
@@ -185,7 +189,7 @@ Não existe requisito de tempo real. O objetivo de duração dos jobs será defi
 
 A versão 1 estará concluída quando existir evidência reproduzível de:
 
-- ingestão da janela móvel de 12 meses, nacional, para todas as modalidades consultáveis e para o recorte tecnológico aprovado;
+- ingestão da janela móvel de 12 meses para o recorte tecnológico aprovado, com cobertura por fonte, esfera e geografia medida e exposta, sem apresentar cobertura parcial como nacional completa;
 - Bronze imutável e rastreável;
 - controle operacional separado dos payloads Bronze;
 - Silver tipada, deduplicada e atualizada por Delta `MERGE`;
@@ -201,6 +205,8 @@ A versão 1 estará concluída quando existir evidência reproduzível de:
 - benchmark inicial e benchmark final entre estratégias Spark com resultado lógico equivalente;
 - dashboard Databricks AI/BI apoiado por consultas do Databricks SQL;
 - documentação de decisões, evidências e limitações.
+
+Os enriquecimentos aprovados atendem a finalidades limitadas: CNPJ/QSA normaliza identidade cadastral; IBGE organiza geografia; IPCA permite valores reais identificados separadamente dos nominais; CEIS/CNEP acrescentam contexto correcional datado. Presença ou ausência em cadastro correcional não classifica fraude, irregularidade ou risco.
 
 Se fonte, quota ou ambiente impedirem um item obrigatório, a versão 1 permanece incompleta até existir correção, mudança de ambiente ou revisão explícita de escopo aprovada. A documentação da limitação, isoladamente, não transforma o requisito em concluído.
 

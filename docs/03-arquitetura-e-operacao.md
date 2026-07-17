@@ -18,6 +18,8 @@
 ```mermaid
 flowchart LR
     PNCP["APIs públicas do PNCP"] --> COLETA["Coleta HTTP local em Python"]
+    CSV["Arquivos oficiais Compras.gov e Comprasnet"] --> COLETA
+    ENR["CNPJ, IBGE, IPCA e CEIS/CNEP"] --> COLETA
     COLETA --> OPSLOCAL["Manifesto operacional local"]
     COLETA --> ARQUIVOS["Payloads e manifestos da coleta"]
     ARQUIVOS --> ENVIO["Transferência controlada ao workspace"]
@@ -53,7 +55,7 @@ Fonte: [limitações do Databricks Free](https://docs.databricks.com/aws/en/gett
 Consequências:
 
 - no máximo cinco tarefas concorrentes, preferencialmente menos;
-- nenhuma chamada ao PNCP será executada no serverless enquanto a restrição de egress permanecer;
+- nenhuma coleta de fonte externa dependerá do egress serverless enquanto a restrição atual permanecer;
 - ingestão no Databricks começa nos payloads e manifestos transferidos pela coleta local;
 - nenhuma dependência de configuração de cluster customizada;
 - evidência de performance limitada ao ambiente medido;
@@ -71,7 +73,7 @@ O ambiente local suporta:
 - testes unitários;
 - testes PySpark com datasets pequenos;
 - validação do coletor;
-- coleta oficial do PNCP, confirmada após o domínio não resolver no Databricks Free;
+- coleta das APIs e arquivos oficiais, mantendo cada sistema e canal identificados;
 - geração do payload e manifesto antes da transferência ao workspace.
 
 Payloads, manifestos, staging e caches volumosos usam `D:\RastroPublico\data` no ambiente atual. O SSD `C:` mantém somente código, testes e documentação pequenos. O caminho de dados é externo ao repositório e deve ser recebido por parâmetro, nunca fixado nos módulos.
@@ -82,7 +84,7 @@ O local não substitui a evidência de execução Spark no Databricks.
 
 | Componente | Responsabilidade | Não faz |
 | --- | --- | --- |
-| Coletor HTTP | Paginação, retry, rate limit, payload e manifesto | Transformações distribuídas |
+| Coletor HTTP/arquivo | Paginação ou download streaming, retry, payload/arquivo e manifesto | Transformações distribuídas |
 | Transferência ao workspace | Enviar lotes íntegros e reconciliáveis da coleta local | Alterar ou interpretar payloads |
 | Loader Bronze | Registrar payload e metadados em Delta | Deduplicar a entidade de negócio |
 | Transformações Silver | Tipar, normalizar, deduplicar e aplicar `MERGE` | Definir conclusões analíticas |
@@ -100,12 +102,12 @@ Características:
 
 - append-only;
 - payload original preservado;
-- uma observação por resposta, página ou registro, conforme o spike determinar;
+- uma observação por resposta/página para APIs ou por arquivo oficial para canais CSV;
 - hash determinístico;
 - metadados mínimos de origem e referência à execução;
 - nenhuma normalização destrutiva.
 
-A Bronze recebe respostas com corpo recuperável obtidas da fonte, inclusive quando o schema for inesperado e precisar bloquear o downstream. Falhas HTTP sem payload de fonte utilizável pertencem somente ao controle operacional.
+A Bronze recebe respostas ou arquivos íntegros obtidos da fonte, inclusive quando o schema for inesperado e precisar bloquear o downstream. Falhas HTTP sem payload de fonte utilizável pertencem somente ao controle operacional. Arquivos grandes permanecem imutáveis no Volume e são registrados em `bronze.arquivos_fonte`; não serão armazenados como um único campo binário Delta.
 
 | Tabela prevista | Grão | Conteúdo |
 | --- | --- | --- |
@@ -115,17 +117,25 @@ A Bronze recebe respostas com corpo recuperável obtidas da fonte, inclusive qua
 | `bronze.contratos_raw` | Resposta/página coletada | Contratos por publicação/atualização/detalhe |
 | `bronze.historicos_raw` | Resposta de histórico | Eventos de contratação ou contrato |
 | `bronze.dominios_raw` | Resposta de um domínio | Modalidades e códigos auxiliares |
+| `bronze.arquivos_fonte` | Um arquivo oficial íntegro | Hash, tamanho, período, dataset, sistema e caminho imutável no Volume |
+| `bronze.cnpj_raw` | Um arquivo/competência cadastral | CNPJ e QSA preservados conforme publicação oficial |
+| `bronze.geografia_raw` | Uma versão de referência | Códigos e hierarquias territoriais do IBGE |
+| `bronze.indices_precos_raw` | Uma observação de série oficial | IPCA por competência |
+| `bronze.cadastros_correcionais_raw` | Uma ocorrência publicada | CEIS/CNEP com fonte e data de referência |
 
 Metadados mínimos:
 
 - `run_id`;
-- `endpoint`;
+- `sistema_origem` e `canal_entrega`;
+- `dataset_origem` e `endpoint`, quando aplicável;
 - `url_origem` ou parâmetros normalizados;
 - `coletado_em_utc`;
+- `data_publicacao_arquivo`, quando fornecida;
 - `data_inicio_consulta` e `data_fim_consulta`;
 - `pagina`;
 - `hash_payload`;
-- `payload`.
+- `payload` ou `caminho_arquivo_imutavel`;
+- `tamanho_bytes` e `schema_observado` para arquivos.
 
 ### 5.2 Controle operacional
 
@@ -133,6 +143,7 @@ Metadados mínimos:
 | --- | --- | --- |
 | `ops.ingestion_runs` | Uma execução lógica | Parâmetros, início, fim, status e resumo |
 | `ops.ingestion_requests` | Uma tentativa HTTP | Endpoint, página, tentativa, status HTTP, duração e erro sanitizado |
+| `ops.ingestion_artifacts` | Um download ou transferência | URL, arquivo, bytes, hashes, duração, estado e destino |
 | `ops.pipeline_state` | Um pipeline e recorte incremental | Watermark concluído e versão de estado |
 | `ops.quality_results` | Uma regra por run e escopo | Severidade, contagens, cobertura e resultado |
 
@@ -154,6 +165,9 @@ Metadados mínimos:
 | `silver.categorias_tecnologia` | Uma regra/categoria versionada | Classificação do recorte tecnológico |
 | `silver.unidades_normalizadas` | Um mapeamento de unidade | Comparabilidade de quantidade/preço |
 | `silver.registros_quarentena` | Um registro rejeitado por regra | Evidência, motivo e origem |
+| `silver.geografias` | Um código territorial versionado | Hierarquia oficial do IBGE |
+| `silver.indices_precos` | Uma competência do índice | IPCA e metadados da série |
+| `silver.contexto_correcional` | Fornecedor, cadastro e ocorrência | CEIS/CNEP datados e separados das métricas de contratação |
 
 ### 5.4 Gold
 
@@ -173,9 +187,9 @@ Schemas e colunas são previsões. O Bloco 0 confirmou campos e chaves candidata
 
 ### 6.1 Bootstrap
 
-1. descobrir modalidades ativas no coletor local;
-2. dividir o período por data e modalidade;
-3. coletar localmente publicação de contratações e contratos;
+1. baixar os arquivos anuais oficiais necessários por período e registrar hash/data de publicação;
+2. carregar entidades de forma independente, sem exigir fechamento referencial dentro do mesmo arquivo;
+3. usar a API PNCP para reconciliação e lacunas quando disponível;
 4. selecionar candidatos de tecnologia;
 5. buscar localmente detalhes, itens, resultados e históricos;
 6. fechar payloads e manifestos do lote;
@@ -186,9 +200,9 @@ Schemas e colunas são previsões. O Bloco 0 confirmou campos e chaves candidata
 
 ### 6.2 Carga diária
 
-1. ler último watermark concluído;
-2. aplicar janela de sobreposição configurada;
-3. consultar localmente endpoints de atualização;
+1. ler último watermark concluído e o último hash por dataset;
+2. baixar arquivos diários somente quando publicação ou conteúdo mudar;
+3. consultar endpoints de atualização do PNCP quando disponíveis;
 4. transferir e reconciliar os novos payloads e manifestos;
 5. registrar novas observações na Bronze e o estado da coleta em `ops.*`;
 6. identificar chaves afetadas;
@@ -205,6 +219,7 @@ Schemas e colunas são previsões. O Bloco 0 confirmou campos e chaves candidata
 - `modo`: `bootstrap`, `incremental` ou `reprocessamento`;
 - `run_id`;
 - `origem_coleta`: `local` no ambiente atual;
+- `sistema_origem`, `canal_entrega` e `dataset_origem`;
 - identificador e hash do lote de transferência;
 - chave ou partição opcional para reprocessamento.
 

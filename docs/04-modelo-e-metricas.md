@@ -9,6 +9,7 @@
 - estado corrente e histórico são modelos distintos;
 - métricas de resultado homologado e de contrato não são misturadas;
 - todo indicador publica cobertura e limitações.
+- toda chave de negócio preserva `sistema_origem`; equivalência entre canais só é aplicada após reconciliação explícita.
 
 ## 2. Modelo conceitual
 
@@ -35,11 +36,11 @@ A relação entre contratação e contrato pode estar ausente ou ser indireta. E
 | --- | --- | --- | --- |
 | Órgão | Um órgão/entidade | CNPJ do órgão | Validar órgãos sem CNPJ esperado |
 | Unidade compradora | Uma unidade dentro do órgão | CNPJ do órgão + código da unidade | Código pode não ser global |
-| Contratação | Uma contratação PNCP | número de controle PNCP | Fallback: CNPJ + ano + sequencial |
+| Contratação | Uma contratação publicada | sistema + identificador oficial | Número de controle PNCP permite reconciliação entre canais quando preenchido |
 | Item | Um item de contratação | contratação + `numeroItem` | Número documentado como único na contratação |
 | Resultado | Um resultado de item | item + `sequencialResultado` | Pode haver cancelamento e mais de um resultado |
 | Fornecedor | Uma identidade fornecedora | tipo de pessoa + país + identificador | CPF deve ser pseudonimizado no consumo |
-| Contrato | Um contrato/empenho PNCP | número de controle PNCP | Diferenciar contrato e empenho quando disponível |
+| Contrato | Um contrato/empenho publicado | sistema + identificador oficial | Diferenciar contrato e empenho; vínculo com contratação pode ser indireto |
 | Evento de contratação | Uma operação registrada | contratação + instante + categoria + recurso | Desempate ainda depende da amostra |
 | Evento de contrato | Uma operação registrada | contrato + instante + categoria + recurso | Pode representar termo, documento ou contrato |
 | Categoria de tecnologia | Uma regra versionada | versão + código da categoria | Classificação deve ser reproduzível |
@@ -57,6 +58,7 @@ A relação entre contratação e contrato pode estar ausente ou ser indireta. E
 - situação;
 - valor global estimado, quando semanticamente aplicável;
 - origem, versão e `run_id`.
+- sistema de origem, canal de entrega e identificadores de reconciliação.
 
 ### 4.2 Item
 
@@ -114,6 +116,15 @@ Regra inicial:
 6. não unir fornecedores apenas por razão social semelhante.
 
 Nome normalizado serve para busca e análise de qualidade, não como chave de união automática.
+
+CNPJ/QSA enriquece o estado cadastral por competência e nunca sobrescreve silenciosamente a identidade publicada pela fonte transacional. Divergências de razão social, situação ou natureza jurídica são preservadas como observações datadas. Relações societárias não serão usadas para inferir favorecimento.
+
+### 5.1 Geografia, valores reais e contexto correcional
+
+- códigos municipais são reconciliados com uma versão identificada da malha/cadastro do IBGE;
+- valores nominais permanecem imutáveis; valores corrigidos usam IPCA, competência e data-base explícitas;
+- CEIS e CNEP formam contexto cadastral separado, com início/fim e fonte da ocorrência;
+- ausência ou presença em CEIS/CNEP não altera automaticamente concentração, recorrência, comparabilidade ou qualidade da contratação.
 
 ## 6. Classificação tecnológica
 
@@ -178,7 +189,7 @@ Serviços de desenvolvimento, outsourcing, infraestrutura e cloud não serão co
 - **Grão:** período, entidade, modalidade e categoria.
 - **Campos:** contagens totais, válidas, em quarentena e preenchimento por campo.
 - **Métricas:** cobertura de fornecedor, identificador, unidade, quantidade, preço, categoria, vínculo contratual e comparabilidade.
-- **Interpretação permitida:** qualidade e disponibilidade observadas no PNCP para o recorte.
+- **Interpretação permitida:** qualidade e disponibilidade observadas em cada fonte e na união reconciliada do recorte.
 - **Evitar:** concluir qualidade do processo administrativo apenas pela completude do portal.
 
 ### 8.2 Concentração de fornecedores — primeiro indicador de negócio
@@ -216,7 +227,7 @@ O HHI será publicado na escala `0–1`, acompanhado do número de fornecedores 
 - **Pergunta:** quão distribuída é a atuação do fornecedor?
 - **Grão:** fornecedor, categoria e período.
 - **Métricas:** órgãos, unidades, UFs, municípios, modalidades e valor total distintos.
-- **Limitação:** ausência no PNCP não comprova ausência em toda contratação pública.
+- **Limitação:** ausência nas fontes coletadas não comprova ausência em toda contratação pública.
 - **Interpretação permitida:** presença dentro da cobertura coletada.
 
 ### 8.5 Variação de preços
