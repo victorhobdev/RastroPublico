@@ -7,7 +7,7 @@ import pytest
 
 from rastro_publico.coleta import monitor as monitor_mod
 from rastro_publico.coleta.pncp import coletar_pagina, escrever_lote
-from rastro_publico.coleta.monitor import monitorar
+from rastro_publico.coleta.monitor import monitorar, registrar_linha
 
 
 class Resposta:
@@ -137,9 +137,22 @@ def test_monitor_para_no_primeiro_sucesso() -> None:
 
     assert status == 200
     assert esperas == [300]
-    assert len(registros) == 2
-    assert "timeout" in registros[0]
-    assert "DISPONIVEL" in registros[1]
+    assert len(registros) == 4
+    assert "INICIANDO" in registros[0]
+    assert "RESULTADO" in registros[1]
+    assert "timeout" in registros[1]
+    assert "INICIANDO" in registros[2]
+    assert "RESULTADO" in registros[3]
+    assert "DISPONIVEL" in registros[3]
+
+
+def test_registro_vai_para_terminal_e_arquivo(tmp_path, capsys) -> None:
+    log = tmp_path / "monitor.log"
+
+    registrar_linha("2026-07-17T18:00:00-03:00 INICIANDO", log)
+
+    assert capsys.readouterr().out == "2026-07-17T18:00:00-03:00 INICIANDO\n"
+    assert log.read_text(encoding="utf-8") == "2026-07-17T18:00:00-03:00 INICIANDO\n"
 
 
 def test_probe_confirma_resposta_http(monkeypatch) -> None:
