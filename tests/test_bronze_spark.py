@@ -27,7 +27,10 @@ def test_anti_join_impede_reprocessar_mesma_chave(spark) -> None:
 
 def test_prepara_csv_bronze_com_proveniencia(spark, tmp_path) -> None:
     caminho = tmp_path / "compras.csv"
-    caminho.write_text("id_compra,objeto\n1,Notebook\n2,Monitor\n", encoding="utf-8")
+    caminho.write_text(
+        'id_compra,objeto\n1,"Notebook ""Pro""\ncom suporte"\n2,Monitor\n',
+        encoding="utf-8",
+    )
 
     resultado = preparar_csv_bronze(
         spark,
@@ -52,6 +55,7 @@ def test_prepara_csv_bronze_com_proveniencia(spark, tmp_path) -> None:
         "_coletado_em_utc",
     }
     assert {linha._source_file_id for linha in resultado.collect()} == {"hash-1"}
+    assert resultado.where("id_compra = '1'").first().objeto == 'Notebook "Pro"\ncom suporte'
 
 
 def test_detecta_arquivo_ja_carregado(spark, monkeypatch) -> None:
