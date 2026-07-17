@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import time
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 from urllib.error import HTTPError, URLError
@@ -20,14 +20,22 @@ def monitorar(
     intervalo: int = 300,
 ) -> int:
     while True:
+        inicio = datetime.now().astimezone().isoformat(timespec="seconds")
+        registrar(f"{inicio} INICIANDO")
         status, detalhe = probe()
         disponivel = status in {200, 204}
-        momento = datetime.now(UTC).isoformat()
-        registrar(f"{momento} status={status} detalhe={detalhe}"
+        momento = datetime.now().astimezone().isoformat(timespec="seconds")
+        registrar(f"{momento} RESULTADO status={status} detalhe={detalhe}"
                   f"{' DISPONIVEL' if disponivel else ''}")
         if disponivel:
             return status
         dormir(intervalo)
+
+
+def registrar_linha(linha: str, log: Path) -> None:
+    print(linha, flush=True)
+    with log.open("a", encoding="utf-8") as arquivo:
+        arquivo.write(f"{linha}\n")
 
 
 def probe_pncp(data: str, modalidade: int, timeout: int) -> tuple[int | None, str]:
@@ -67,13 +75,9 @@ def main() -> None:
 
     args.log.parent.mkdir(parents=True, exist_ok=True)
 
-    def registrar(linha: str) -> None:
-        with args.log.open("a", encoding="utf-8") as arquivo:
-            arquivo.write(f"{linha}\n")
-
     monitorar(
         probe=lambda: probe_pncp(args.data, args.modalidade, args.timeout),
-        registrar=registrar,
+        registrar=lambda linha: registrar_linha(linha, args.log),
         intervalo=args.intervalo,
     )
 
