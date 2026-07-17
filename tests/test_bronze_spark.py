@@ -1,3 +1,6 @@
+import os
+import sys
+
 import pytest
 from pyspark.sql import SparkSession
 
@@ -6,6 +9,7 @@ from rastro_publico.coleta.persistencia import filtrar_novas_linhas
 
 @pytest.fixture(scope="module")
 def spark():
+    os.environ["PYSPARK_PYTHON"] = sys.executable
     sessao = SparkSession.builder.master("local[2]").appName("rastro-publico-test").getOrCreate()
     yield sessao
     sessao.stop()
