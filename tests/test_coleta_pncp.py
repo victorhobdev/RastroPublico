@@ -6,6 +6,7 @@ from urllib.error import HTTPError
 import pytest
 
 from rastro_publico.coleta.pncp import coletar_pagina, escrever_lote
+from rastro_publico.coleta.monitor import monitorar
 
 
 class Resposta:
@@ -119,3 +120,22 @@ def test_falha_final_expoe_tentativas() -> None:
             dormir=lambda _: None,
             jitter=lambda: 0.0,
         )
+
+
+def test_monitor_para_no_primeiro_sucesso() -> None:
+    respostas = iter([(None, "timeout"), (200, "ok")])
+    registros = []
+    esperas = []
+
+    status = monitorar(
+        probe=lambda: next(respostas),
+        registrar=registros.append,
+        dormir=esperas.append,
+        intervalo=300,
+    )
+
+    assert status == 200
+    assert esperas == [300]
+    assert len(registros) == 2
+    assert "timeout" in registros[0]
+    assert "DISPONIVEL" in registros[1]
