@@ -2,6 +2,7 @@ from pyspark.sql import DataFrame, Window
 from pyspark.sql.functions import (
     col,
     concat,
+    countDistinct,
     lit,
     lower,
     row_number,
@@ -15,7 +16,7 @@ from pyspark.sql.functions import (
 from pyspark.sql.types import DecimalType
 
 
-def transformar_contratacoes(bronze: DataFrame) -> tuple[DataFrame, DataFrame]:
+def transformar_contratacoes(bronze: DataFrame) -> tuple[DataFrame, DataFrame, DataFrame]:
     tipadas = (
         bronze.select(
             trim(col("id_compra")).alias("id_origem"),
@@ -64,12 +65,20 @@ def transformar_contratacoes(bronze: DataFrame) -> tuple[DataFrame, DataFrame]:
         "hash_conteudo_entidade",
         sha2(to_json(struct(*campos_conteudo), options={"ignoreNullFields": "false"}), 256),
     )
+    chaves_conflito = (
+        validas.groupBy("contratacao_id", "atualizado_em")
+        .agg(countDistinct("hash_conteudo_entidade").alias("total_hashes"))
+        .where("total_hashes > 1")
+        .drop("total_hashes")
+    )
+    conflitos = validas.join(chaves_conflito, ["contratacao_id", "atualizado_em"], "inner")
+    elegiveis = validas.join(chaves_conflito, ["contratacao_id", "atualizado_em"], "left_anti")
     janela = Window.partitionBy("contratacao_id").orderBy(
         col("atualizado_em").desc(),
         col("coletado_em_utc").desc(),
         col("source_file_id").desc(),
     )
-    correntes = validas.withColumn("_ordem", row_number().over(janela)).where("_ordem = 1").drop(
+    correntes = elegiveis.withColumn("_ordem", row_number().over(janela)).where("_ordem = 1").drop(
         "_ordem"
     )
-    return correntes, quarentena
+    return correntes, quarentena, conflitos
