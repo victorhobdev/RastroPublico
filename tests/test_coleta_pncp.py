@@ -5,6 +5,7 @@ from urllib.error import HTTPError
 
 import pytest
 
+from rastro_publico.coleta import monitor as monitor_mod
 from rastro_publico.coleta.pncp import coletar_pagina, escrever_lote
 from rastro_publico.coleta.monitor import monitorar
 
@@ -20,8 +21,8 @@ class Resposta:
     def __exit__(self, *_):
         return None
 
-    def read(self) -> bytes:
-        return self._corpo.read()
+    def read(self, tamanho: int = -1) -> bytes:
+        return self._corpo.read(tamanho)
 
 
 def test_coleta_pagina_50_e_preserva_payload_original() -> None:
@@ -139,3 +140,18 @@ def test_monitor_para_no_primeiro_sucesso() -> None:
     assert len(registros) == 2
     assert "timeout" in registros[0]
     assert "DISPONIVEL" in registros[1]
+
+
+def test_probe_confirma_resposta_http(monkeypatch) -> None:
+    monkeypatch.setattr(monitor_mod, "urlopen", lambda *_args, **_kwargs: Resposta(b"{}"))
+
+    assert monitor_mod.probe_pncp("20260115", 6, 30) == (200, "resposta recebida")
+
+
+def test_probe_registra_erro_http(monkeypatch) -> None:
+    def falhar(request, timeout):
+        raise HTTPError(request.full_url, 503, "indisponivel", {}, None)
+
+    monkeypatch.setattr(monitor_mod, "urlopen", falhar)
+
+    assert monitor_mod.probe_pncp("20260115", 6, 30) == (503, "HTTPError")
