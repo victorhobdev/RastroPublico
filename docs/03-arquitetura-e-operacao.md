@@ -74,6 +74,8 @@ O ambiente local suporta:
 - coleta oficial do PNCP, confirmada após o domínio não resolver no Databricks Free;
 - geração do payload e manifesto antes da transferência ao workspace.
 
+Payloads, manifestos, staging e caches volumosos usam `D:\RastroPublico\data` no ambiente atual. O SSD `C:` mantém somente código, testes e documentação pequenos. O caminho de dados é externo ao repositório e deve ser recebido por parâmetro, nunca fixado nos módulos.
+
 O local não substitui a evidência de execução Spark no Databricks.
 
 ## 4. Componentes
