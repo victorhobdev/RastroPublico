@@ -70,10 +70,11 @@ def test_seleciona_versao_mais_recente_e_tipa_campos(spark) -> None:
         SCHEMA,
     )
 
-    correntes, quarentena = transformar_contratacoes(bronze)
+    correntes, quarentena, conflitos = transformar_contratacoes(bronze)
     atual = correntes.first()
 
     assert quarentena.count() == 0
+    assert conflitos.count() == 0
     assert atual.objeto == "Atual"
     assert str(atual.valor_total_estimado) == "200.75"
     assert atual.ind_atual is True
@@ -83,9 +84,10 @@ def test_seleciona_versao_mais_recente_e_tipa_campos(spark) -> None:
 def test_quarentena_cnpj_ausente(spark) -> None:
     bronze = spark.createDataFrame([linha(orgao_entidade_cnpj=None)], SCHEMA)
 
-    correntes, quarentena = transformar_contratacoes(bronze)
+    correntes, quarentena, conflitos = transformar_contratacoes(bronze)
 
     assert correntes.count() == 0
+    assert conflitos.count() == 0
     assert quarentena.first().motivo_quarentena == "cnpj_orgao_ausente"
 
 
@@ -98,6 +100,23 @@ def test_hash_de_conteudo_ignora_metadados_tecnicos(spark) -> None:
         SCHEMA,
     )
 
-    correntes, _ = transformar_contratacoes(bronze)
+    correntes, _, conflitos = transformar_contratacoes(bronze)
 
+    assert conflitos.count() == 0
     assert correntes.select("hash_conteudo_entidade").distinct().count() == 1
+
+
+def test_empate_com_conteudo_diferente_vai_para_conflito(spark) -> None:
+    bronze = spark.createDataFrame(
+        [
+            linha(objeto_compra="Versao A", _source_file_id="arquivo-1"),
+            linha(objeto_compra="Versao B", _source_file_id="arquivo-2"),
+        ],
+        SCHEMA,
+    )
+
+    correntes, quarentena, conflitos = transformar_contratacoes(bronze)
+
+    assert correntes.count() == 0
+    assert quarentena.count() == 0
+    assert conflitos.count() == 2
