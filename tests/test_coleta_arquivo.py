@@ -38,7 +38,7 @@ def test_baixa_arquivo_atomico_com_manifesto(tmp_path) -> None:
     assert documento["canal_entrega"] == "repositorio_csv"
     assert documento["dataset_origem"] == "VW_FT_PNCP_COMPRA"
     assert documento["tamanho_bytes"] == 16
-    assert documento["hash_arquivo"] == "5c6e1695e4793ab82e2e66efb9f12149db96767da9deca1d54b4518c9ce86cf3"
+    assert documento["hash_arquivo"] == "c5011ec4d1ed9e0980d4d111e3d85fb036b001e6bb068b56adbc546dd313bf10"
     assert documento["data_publicacao_arquivo"] == "Fri, 17 Jul 2026 00:00:00 GMT"
 
 
