@@ -71,7 +71,7 @@ def test_seleciona_versao_mais_recente_e_tipa_campos(spark) -> None:
     )
 
     correntes, quarentena = transformar_contratacoes(bronze)
-    atual = correntes.one()
+    atual = correntes.first()
 
     assert quarentena.count() == 0
     assert atual.objeto == "Atual"
@@ -86,7 +86,7 @@ def test_quarentena_cnpj_ausente(spark) -> None:
     correntes, quarentena = transformar_contratacoes(bronze)
 
     assert correntes.count() == 0
-    assert quarentena.one().motivo_quarentena == "cnpj_orgao_ausente"
+    assert quarentena.first().motivo_quarentena == "cnpj_orgao_ausente"
 
 
 def test_hash_de_conteudo_ignora_metadados_tecnicos(spark) -> None:
