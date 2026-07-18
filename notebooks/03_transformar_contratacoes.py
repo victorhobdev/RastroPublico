@@ -1,22 +1,25 @@
 # Databricks notebook source
 # ruff: noqa: E402, F821
 import json
+import re
 import sys
 
 from pyspark.sql.functions import col, concat_ws, lit, sha2
 
 
 dbutils.widgets.text("source_root", "")
+dbutils.widgets.text("input_schema", "workspace.bronze")
 source_root = dbutils.widgets.get("source_root")
-if not source_root:
-    raise ValueError("source_root e obrigatorio")
+input_schema = dbutils.widgets.get("input_schema")
+if not source_root or not re.fullmatch(r"[A-Za-z0-9_]+\.[A-Za-z0-9_]+", input_schema):
+    raise ValueError("source_root ou input_schema invalido")
 sys.path.insert(0, source_root)
 
 from rastro_publico.transformacoes.contratacoes import transformar_contratacoes
 
 
 spark.sql("CREATE SCHEMA IF NOT EXISTS workspace.silver")
-bronze = spark.table("workspace.bronze.contratacoes_raw")
+bronze = spark.table(f"{input_schema}.contratacoes_raw")
 correntes, quarentena, conflitos_bronze = transformar_contratacoes(bronze)
 tabela = "workspace.silver.contratacoes"
 

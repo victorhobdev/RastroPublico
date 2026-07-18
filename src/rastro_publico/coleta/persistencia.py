@@ -1,9 +1,7 @@
-from pyspark.sql import DataFrame, SparkSession
+import re
+
+from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType
-
-
-def filtrar_novas_linhas(entrada: DataFrame, existente: DataFrame, chave: str) -> DataFrame:
-    return entrada.join(existente.select(chave).dropDuplicates(), chave, "left_anti")
 
 
 def append_delta_idempotente(
@@ -15,10 +13,21 @@ def append_delta_idempotente(
 ) -> int:
     if not linhas:
         return 0
-    novas = spark.createDataFrame(linhas, schema)
-    if spark.catalog.tableExists(tabela):
-        novas = filtrar_novas_linhas(novas, spark.table(tabela), chave)
-    quantidade = novas.count()
-    if quantidade:
-        novas.write.format("delta").mode("append").saveAsTable(tabela)
-    return quantidade
+    if not re.fullmatch(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+){1,2}", tabela):
+        raise ValueError("tabela invalida")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", chave):
+        raise ValueError("chave invalida")
+
+    from delta.tables import DeltaTable
+
+    novas = spark.createDataFrame(linhas, schema).dropDuplicates([chave])
+    novas.limit(0).write.format("delta").mode("ignore").saveAsTable(tabela)
+    delta = DeltaTable.forName(spark, tabela)
+    (
+        delta.alias("destino")
+        .merge(novas.alias("origem"), f"destino.{chave} = origem.{chave}")
+        .whenNotMatchedInsertAll()
+        .execute()
+    )
+    metricas = delta.history(1).select("operationMetrics").first()[0]
+    return int(metricas.get("numTargetRowsInserted", 0))

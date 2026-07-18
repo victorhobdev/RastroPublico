@@ -106,7 +106,11 @@ def escrever_lote(
     for resultado in resultados:
         arquivo = None
         if resultado.payload is not None:
-            arquivo = f"pagina-{resultado.pagina:05d}.json"
+            endpoint_id = sha256(resultado.endpoint.encode()).hexdigest()[:8]
+            arquivo = (
+                f"{resultado.data}-m{resultado.modalidade}-"
+                f"{endpoint_id}-p{resultado.pagina:05d}.json"
+            )
             (diretorio / arquivo).write_bytes(resultado.payload)
         respostas.append(
             {

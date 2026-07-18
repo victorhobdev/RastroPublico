@@ -1,6 +1,7 @@
 # Databricks notebook source
 # ruff: noqa: E402, F821
 import json
+import re
 import sys
 from datetime import date, datetime, timezone
 
@@ -8,6 +9,7 @@ from pyspark.sql.functions import col, concat_ws, lit, sha2
 
 
 dbutils.widgets.text("source_root", "")
+dbutils.widgets.text("input_schema", "workspace.bronze")
 dbutils.widgets.text("run_id", "")
 dbutils.widgets.dropdown(
     "modo", "reprocessamento", ["bootstrap", "incremental", "reprocessamento"]
@@ -16,13 +18,19 @@ dbutils.widgets.text("data_inicio", "")
 dbutils.widgets.text("data_fim", "")
 dbutils.widgets.text("sobreposicao_dias", "3")
 source_root = dbutils.widgets.get("source_root")
+input_schema = dbutils.widgets.get("input_schema")
 run_id = dbutils.widgets.get("run_id")
 modo = dbutils.widgets.get("modo")
 data_inicio_param = dbutils.widgets.get("data_inicio")
 data_fim_param = dbutils.widgets.get("data_fim")
 sobreposicao_dias = int(dbutils.widgets.get("sobreposicao_dias"))
-if not source_root or not run_id or not data_fim_param:
-    raise ValueError("source_root, run_id e data_fim sao obrigatorios")
+if (
+    not source_root
+    or not run_id
+    or not data_fim_param
+    or not re.fullmatch(r"[A-Za-z0-9_]+\.[A-Za-z0-9_]+", input_schema)
+):
+    raise ValueError("source_root, run_id, data_fim ou input_schema invalido")
 sys.path.insert(0, source_root)
 
 from rastro_publico.operacao import avaliar_regra, decidir_watermark, janela_incremental
@@ -72,9 +80,9 @@ def materializar_snapshot(dados, tabela):
 
 
 spark.sql("CREATE SCHEMA IF NOT EXISTS workspace.silver")
-bronze_itens = spark.table("workspace.bronze.itens_raw")
-bronze_resultados = spark.table("workspace.bronze.resultados_raw")
-bronze_contratacoes = spark.table("workspace.bronze.contratacoes_raw")
+bronze_itens = spark.table(f"{input_schema}.itens_raw")
+bronze_resultados = spark.table(f"{input_schema}.resultados_raw")
+bronze_contratacoes = spark.table(f"{input_schema}.contratacoes_raw")
 
 itens, itens_quarentena, itens_conflitos = transformar_itens(bronze_itens)
 itens = classificar_servicos(classificar_equipamentos(itens))

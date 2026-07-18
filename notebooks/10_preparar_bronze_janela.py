@@ -100,14 +100,14 @@ historicos = (
     .drop("id_contrato_origem")
 )
 
-spark.sql("CREATE SCHEMA IF NOT EXISTS workspace.bronze")
+spark.sql("CREATE SCHEMA IF NOT EXISTS workspace.staging")
 tabelas = {
-    "contratacoes": (compras, "workspace.bronze.contratacoes_raw"),
-    "itens": (itens, "workspace.bronze.itens_raw"),
-    "resultados": (resultados, "workspace.bronze.resultados_raw"),
-    "contratos": (contratos, "workspace.bronze.contratos_raw"),
-    "contratos_itens": (contratos_itens, "workspace.bronze.contrato_itens_raw"),
-    "historicos": (historicos, "workspace.bronze.contrato_historicos_raw"),
+    "contratacoes": (compras, "workspace.staging.contratacoes_raw"),
+    "itens": (itens, "workspace.staging.itens_raw"),
+    "resultados": (resultados, "workspace.staging.resultados_raw"),
+    "contratos": (contratos, "workspace.staging.contratos_raw"),
+    "contratos_itens": (contratos_itens, "workspace.staging.contrato_itens_raw"),
+    "historicos": (historicos, "workspace.staging.contrato_historicos_raw"),
 }
 for dados, tabela in tabelas.values():
     dados.write.format("delta").mode("overwrite").option(

@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+from delta.tables import DeltaTable
+from pyspark.sql.functions import col, countDistinct, lit, sum as spark_sum
 from pyspark.sql.types import LongType, StringType, StructField, StructType
 
 
@@ -70,6 +72,7 @@ schema_arquivos = StructType(
         StructField("data_publicacao_arquivo", StringType(), True),
         StructField("tamanho_bytes", LongType(), False),
         StructField("hash_arquivo", StringType(), False),
+        StructField("total_linhas", LongType(), False),
     ]
 )
 schema_runs = StructType(
@@ -104,32 +107,17 @@ arquivo_fonte = {
     "tamanho_bytes": documento["tamanho_bytes"],
     "hash_arquivo": source_file_id,
 }
-resultado = {
-    "linhas_entrada": linhas_entrada,
-    "linhas_inseridas": linhas_inseridas,
-    "arquivos_inseridos": append_delta_idempotente(
-        spark,
-        [arquivo_fonte],
-        schema_arquivos,
-        "workspace.bronze.arquivos_fonte",
-        "source_file_id",
-    ),
-    "runs_inseridos": append_delta_idempotente(
-        spark,
-        [{
-            "run_id": documento["run_id"],
-            "criado_em_utc": documento["coletado_em_utc"],
-            "status": "SUCESSO",
-            "total_artefatos": 1,
-            "total_linhas": linhas_entrada,
-        }],
-        schema_runs,
-        "workspace.ops.ingestion_runs_arquivo",
-        "run_id",
-    ),
-    "artefatos_inseridos": append_delta_idempotente(
-        spark,
-        [{
+arquivos_inseridos = append_delta_idempotente(
+    spark,
+    [arquivo_fonte],
+    schema_arquivos,
+    "workspace.bronze.arquivos_fonte",
+    "source_file_id",
+)
+artefatos_inseridos = append_delta_idempotente(
+    spark,
+    [
+        {
             "artifact_id": hashlib.sha256(
                 f"{documento['run_id']}|{source_file_id}".encode()
             ).hexdigest(),
@@ -138,10 +126,44 @@ resultado = {
             "status": "SUCESSO",
             "tamanho_bytes": documento["tamanho_bytes"],
             "hash_arquivo": source_file_id,
-        }],
-        schema_artefatos,
-        "workspace.ops.ingestion_artifacts",
-        "artifact_id",
-    ),
+            "total_linhas": linhas_entrada,
+        }
+    ],
+    schema_artefatos,
+    "workspace.ops.ingestion_artifacts",
+    "artifact_id",
+)
+
+resumo_run = (
+    spark.table("workspace.ops.ingestion_artifacts")
+    .where(col("run_id") == documento["run_id"])
+    .agg(
+        countDistinct("source_file_id").alias("total_artefatos"),
+        spark_sum("total_linhas").cast("long").alias("total_linhas"),
+    )
+    .withColumn("run_id", lit(documento["run_id"]))
+    .withColumn("criado_em_utc", lit(documento["coletado_em_utc"]))
+    .withColumn("status", lit("SUCESSO"))
+    .select(*[campo.name for campo in schema_runs])
+)
+tabela_runs = "workspace.ops.ingestion_runs_arquivo"
+if spark.catalog.tableExists(tabela_runs):
+    (
+        DeltaTable.forName(spark, tabela_runs)
+        .alias("destino")
+        .merge(resumo_run.alias("origem"), "destino.run_id = origem.run_id")
+        .whenMatchedUpdateAll()
+        .whenNotMatchedInsertAll()
+        .execute()
+    )
+else:
+    resumo_run.write.format("delta").saveAsTable(tabela_runs)
+
+resultado = {
+    "linhas_entrada": linhas_entrada,
+    "linhas_inseridas": linhas_inseridas,
+    "arquivos_inseridos": arquivos_inseridos,
+    "artefatos_inseridos": artefatos_inseridos,
+    "run_atualizado": 1,
 }
 print(json.dumps(resultado))

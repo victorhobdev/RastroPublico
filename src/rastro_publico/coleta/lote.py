@@ -29,7 +29,11 @@ def preparar_lote(caminho_manifesto: Path) -> LotePreparado:
             hash_observado = sha256(payload).hexdigest()
             if hash_observado != resposta["hash_payload"]:
                 raise ValueError(f"hash divergente: {arquivo}")
-            chave = f"{run_id}|{resposta['endpoint']}|{resposta['modalidade']}|{resposta['pagina']}"
+            chave = (
+                f"{run_id}|{resposta['endpoint']}|"
+                f"{resposta['data_inicio_consulta']}|{resposta['data_fim_consulta']}|"
+                f"{resposta['modalidade']}|{resposta['pagina']}"
+            )
             bronze.append(
                 {
                     "observacao_id": sha256(chave.encode()).hexdigest(),
@@ -47,7 +51,12 @@ def preparar_lote(caminho_manifesto: Path) -> LotePreparado:
             )
 
         for tentativa in resposta["tentativas"]:
-            chave = f"{run_id}|{resposta['endpoint']}|{resposta['modalidade']}|{resposta['pagina']}|{tentativa['numero']}"
+            chave = (
+                f"{run_id}|{resposta['endpoint']}|"
+                f"{resposta['data_inicio_consulta']}|{resposta['data_fim_consulta']}|"
+                f"{resposta['modalidade']}|{resposta['pagina']}|"
+                f"{tentativa['numero']}"
+            )
             requests.append(
                 {
                     "request_id": sha256(chave.encode()).hexdigest(),

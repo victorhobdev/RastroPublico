@@ -1,6 +1,7 @@
 # Databricks notebook source
 # ruff: noqa: E402, F821
 import json
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -8,11 +9,17 @@ from pyspark.sql.functions import col, concat_ws, lit, sha2
 
 
 dbutils.widgets.text("source_root", "")
+dbutils.widgets.text("input_schema", "workspace.bronze")
 dbutils.widgets.text("run_id", "")
 source_root = dbutils.widgets.get("source_root")
+input_schema = dbutils.widgets.get("input_schema")
 run_id = dbutils.widgets.get("run_id")
-if not source_root or not run_id:
-    raise ValueError("source_root e run_id sao obrigatorios")
+if (
+    not source_root
+    or not run_id
+    or not re.fullmatch(r"[A-Za-z0-9_]+\.[A-Za-z0-9_]+", input_schema)
+):
+    raise ValueError("source_root, run_id ou input_schema invalido")
 sys.path.insert(0, source_root)
 
 from rastro_publico.operacao import avaliar_regra
@@ -33,9 +40,9 @@ spark.sql("CREATE SCHEMA IF NOT EXISTS workspace.silver")
 spark.sql("CREATE SCHEMA IF NOT EXISTS workspace.gold")
 spark.sql("CREATE SCHEMA IF NOT EXISTS workspace.ops")
 
-bronze_contratos = spark.table("workspace.bronze.contratos_raw")
-bronze_itens = spark.table("workspace.bronze.contrato_itens_raw")
-bronze_eventos = spark.table("workspace.bronze.contrato_historicos_raw")
+bronze_contratos = spark.table(f"{input_schema}.contratos_raw")
+bronze_itens = spark.table(f"{input_schema}.contrato_itens_raw")
+bronze_eventos = spark.table(f"{input_schema}.contrato_historicos_raw")
 
 contratos, fornecedores, contratos_quarentena, contratos_conflitos = (
     transformar_contratos(
