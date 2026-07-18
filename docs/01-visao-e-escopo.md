@@ -5,7 +5,6 @@
 - **Status:** baseline revisada após parecer externo e reanálise interna.
 - **Versão:** 1.4.
 - **Data-base:** 18 de julho de 2026.
-- **Fonte de contexto profissional:** `inventario-competencias-evidencias.md`.
 - **Escopo deste documento:** problema, público, perguntas, limites e critérios de sucesso.
 - **Fora deste documento:** schema físico definitivo, código, notebooks e configuração de infraestrutura.
 
@@ -21,7 +20,7 @@ O projeto deve produzir evidência defendível para uma vaga de Engenharia de Da
 
 ### 3.1 Competências já comprovadas e reaproveitadas
 
-O inventário apresenta evidência forte ou suficiente de:
+O histórico profissional do autor apresenta evidência de:
 
 - Python, SQL e PostgreSQL;
 - ETL/ELT, Airflow, dbt e Great Expectations;
@@ -229,7 +228,8 @@ Termos como fraude, corrupção, superfaturamento ou irregularidade só podem ap
 Em 18 de julho de 2026, os 15 blocos de construção foram executados. A janela
 materializada cobre `2025-07-18` a `2026-07-17` no canal oficial anual
 Compras.gov/Comprasnet aprovado. O dashboard Databricks AI/BI é a interface de
-consumo e as evidências estáticas estão em `docs/assets`.
+consumo no ambiente Databricks; exports históricos não fazem parte do
+repositório público.
 
 A amplitude analítica foi mantida, mas a evidência corrigiu a promessa de
 cobertura: o canal anual contém um subconjunto das modalidades PNCP. A cobertura

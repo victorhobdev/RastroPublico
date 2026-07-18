@@ -5,10 +5,6 @@ tecnologia, relacionando órgãos, fornecedores, itens e contratos. Os indicador
 são descritivos: apontam concentração, recorrência e cobertura para investigação,
 sem classificar fraude ou irregularidade.
 
-[Abrir o case study histórico em PDF](deliverables/RastroPublico-case-study.pdf)
-
-![Arquitetura do RastroPúblico](deliverables/assets/arquitetura.png)
-
 ## O que foi processado
 
 Os números publicados pela auditoria anterior foram retirados do README: o script
@@ -79,16 +75,13 @@ databricks bundle validate -t dev --profile rastro-publico \
   --var "landing_root=<volume>,contexto_root=<volume>"
 ```
 
-## Mapa de evidências
+## Mapa técnico
 
-- [auditoria e baseline atual](docs/25-auditoria-e-baseline-portfolio.md);
-- [parecer final de portfólio](docs/26-parecer-final-portfolio.md);
 - [arquitetura e operação](docs/03-arquitetura-e-operacao.md);
 - [modelo e métricas](docs/04-modelo-e-metricas.md);
 - [runbook](docs/21-runbook-operacional.md);
 - o recálculo de KPIs e a auditoria monetária precisam ser reexecutados; os JSONs
-  citados anteriormente não estão neste pacote;
-- [evidências sanitizadas do Databricks](evidence/databricks/);
+  e exports históricos não fazem parte do repositório público;
 - [índice completo da documentação](docs/00-indice-documentacao.md).
 
 ## Limitações atuais
@@ -97,9 +90,8 @@ databricks bundle validate -t dev --profile rastro-publico \
 - O snapshot Delta anterior à auditoria contém KPIs invalidados; a Gold corrigida
   precisa ser rematerializada quando houver compute disponível.
 - O runtime local é Spark 4.2; o serverless observado era Spark 4.1.
-- O Query History foi exportado, mas o JSON detalhado do Query Profile não.
-- As capturas antigas do dashboard são históricas. Para divulgação, use o
-  case study somente após regenerá-lo com o novo recálculo.
+- O Query History foi exportado anteriormente, mas o JSON detalhado do Query
+  Profile não; esses exports históricos não são publicados neste repositório.
 
-Relatórios de execução antigos permanecem no repositório como trilha de decisão,
-mas não são fonte de verdade para os KPIs atuais.
+Código, testes e documentação técnica atual são as fontes de verdade deste
+repositório. Relatórios e artefatos históricos foram removidos.
