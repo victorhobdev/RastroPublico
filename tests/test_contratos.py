@@ -43,7 +43,7 @@ def test_populacao_contratual_restringe_contratos_eventos_e_fornecedores(spark) 
 
 @pytest.fixture(scope="module")
 def spark():
-    os.environ["PYSPARK_PYTHON"] = sys.executable
+    os.environ["PYSPARK_PYTHON"] = getattr(sys, "_base_executable", sys.executable)
     sessao = SparkSession.builder.master("local[2]").appName("contratos-test").getOrCreate()
     yield sessao
     sessao.stop()

@@ -10,7 +10,7 @@ from rastro_publico.transformacoes.contratacoes import transformar_contratacoes
 
 @pytest.fixture(scope="module")
 def spark():
-    os.environ["PYSPARK_PYTHON"] = sys.executable
+    os.environ["PYSPARK_PYTHON"] = getattr(sys, "_base_executable", sys.executable)
     sessao = (
         SparkSession.builder.master("local[2]")
         .appName("silver-contratacoes-test")

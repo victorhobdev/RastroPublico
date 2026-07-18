@@ -13,7 +13,7 @@ from rastro_publico.coleta.arquivo_bronze import (
 
 @pytest.fixture(scope="module")
 def spark():
-    os.environ["PYSPARK_PYTHON"] = sys.executable
+    os.environ["PYSPARK_PYTHON"] = getattr(sys, "_base_executable", sys.executable)
     sessao = SparkSession.builder.master("local[2]").appName("rastro-publico-test").getOrCreate()
     yield sessao
     sessao.stop()
