@@ -364,7 +364,7 @@ def classificar_servicos(itens: DataFrame) -> DataFrame:
             servico
             & texto.rlike(
                 r"^(cessao temporaria de direitos sobre programas? de computador|"
-                r"licenciamento de direitos|licenca(?:mento)? de (?:uso de )?"
+                r"licenciamento de direitos|licen(?:ca|ciamento) de (?:uso de )?"
                 r"(?:software|programas? de computador)|subscricao de software)\b"
             ),
             "licenciamento",

@@ -255,6 +255,18 @@ def transformar_itens_contrato(
             ),
         )
         .withColumn(
+            "motivo_ineligibilidade_preco",
+            when(
+                col("quantidade").isNull() | (col("quantidade") <= 0),
+                "quantidade_nao_positiva",
+            )
+            .when(col("valor_unitario").isNull(), "valor_unitario_ausente")
+            .when(col("valor_total").isNull(), "valor_total_ausente"),
+        )
+        .withColumn(
+            "elegivel_preco", col("motivo_ineligibilidade_preco").isNull()
+        )
+        .withColumn(
             "motivo_quarentena",
             when(
                 col("id_origem_item_contrato").isNull()
@@ -265,10 +277,6 @@ def transformar_itens_contrato(
                 col("id_origem_contrato").isNull()
                 | (col("id_origem_contrato") == ""),
                 "contrato_ausente",
-            )
-            .when(
-                col("quantidade").isNull() | (col("quantidade") <= 0),
-                "quantidade_nao_positiva",
             )
             .when(col("valor_unitario") < 0, "valor_unitario_negativo")
             .when(col("valor_total") < 0, "valor_total_negativo")
