@@ -278,25 +278,31 @@ def transformar_vinculos_contratacao(bronze: DataFrame) -> DataFrame:
 
 def classificar_equipamentos(itens: DataFrame) -> DataFrame:
     texto = lower(col("descricao"))
+    material = col("material_ou_servico") == "M"
     categoria = (
         when(
-            texto.rlike(r"\b(notebook|computador|desktop|microcomputador)\b"),
+            material
+            & texto.rlike(r"^(notebook|computador\b|desktop\b|microcomputador\b)"),
             "computador_notebook",
         )
-        .when(texto.rlike(r"\bmonitor\b"), "monitor")
         .when(
-            texto.rlike(r"\b(impressora|scanner|multifuncional)\b"),
+            material
+            & texto.rlike(r"^monitor\s+(de\s+vídeo|vídeo|imagem|lcd|led|computador)"),
+            "monitor",
+        )
+        .when(
+            material & texto.rlike(r"^(impressora|scanner|multifuncional)\b"),
             "impressora_scanner",
         )
-        .when(texto.rlike(r"\bservidor\b"), "servidor")
+        .when(material & texto.rlike(r"^servidor\b"), "servidor")
         .when(
-            texto.rlike(r"\b(switch|roteador|access point|comutador)\b"),
+            material & texto.rlike(r"^(switch|roteador|access point|comutador)\b"),
             "equipamento_rede",
         )
         .otherwise("incerto")
     )
     return itens.withColumn("categoria_tecnologia", categoria).withColumn(
-        "versao_regra", lit("equipamentos_v1")
+        "versao_regra", lit("equipamentos_v2")
     )
 
 
