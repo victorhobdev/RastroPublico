@@ -151,6 +151,33 @@ def test_contrato_quarentena_data_e_valor_invalidos(spark) -> None:
     assert quarentena.first().motivo_quarentena == "valor_global_negativo"
 
 
+def test_contrato_prioriza_data_do_snapshot_oficial(spark) -> None:
+    bronze = spark.createDataFrame(
+        [
+            (
+                "10",
+                "JURIDICA",
+                "12345678000199",
+                "2025-08-06T12:30:54+00:00",
+                "2026-07-18T05:31:35+00:00",
+                "a1",
+            )
+        ],
+        [
+            "id",
+            "fornecedor_tipo",
+            "fonecedor_cnpj_cpf_idgener",
+            "_data_publicacao_arquivo",
+            "_coletado_em_utc",
+            "_source_file_id",
+        ],
+    )
+
+    contrato = transformar_contratos(bronze, "segredo")[0].first()
+
+    assert str(contrato.atualizado_em).startswith("2025-08-06")
+
+
 def test_item_contratual_tipado_e_classificado(spark) -> None:
     bronze = spark.createDataFrame(
         [

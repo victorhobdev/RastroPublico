@@ -28,7 +28,7 @@ def spark():
     sessao.stop()
 
 
-def test_item_tem_grao_logico_e_quarentena_quantidade(spark) -> None:
+def test_item_invalido_para_preco_permanece_elegivel_para_relacoes(spark) -> None:
     bronze = spark.createDataFrame(
         [
             (
@@ -96,9 +96,11 @@ def test_item_tem_grao_logico_e_quarentena_quantidade(spark) -> None:
 
     itens, quarentena, conflitos = transformar_itens(bronze)
 
-    assert itens.count() == 1
-    assert itens.first().id_origem_item == "item-1"
-    assert quarentena.first().motivo_quarentena == "quantidade_nao_positiva"
+    assert itens.count() == 2
+    item_sem_preco = itens.where("id_origem_item = 'item-2'").first()
+    assert item_sem_preco.elegivel_preco is False
+    assert item_sem_preco.motivo_ineligibilidade_preco == "quantidade_nao_positiva"
+    assert quarentena.count() == 0
     assert conflitos.count() == 0
 
 
@@ -316,6 +318,52 @@ def test_resultado_preserva_cancelamento_sem_expor_identificador(spark) -> None:
     assert resultado.cancelado is True
     assert resultado.motivo_cancelamento == "Correção do resultado"
     assert "identificador_normalizado" not in resultado.asDict()
+
+
+def test_resultado_com_tipo_desconhecido_oculta_identificador(spark) -> None:
+    bronze = spark.createDataFrame(
+        [
+            (
+                "r1",
+                "item-1",
+                "controle-1",
+                "1",
+                "1",
+                "OUTRO",
+                "BRA",
+                "12345678901",
+                "Fornecedor",
+                "1",
+                "100",
+                "100",
+                "2026-07-15",
+                "a1",
+            )
+        ],
+        [
+            "srk_item_resultado",
+            "id_compra_item",
+            "numero_controle_PNCP_compra",
+            "numero_item_pncp",
+            "sequencial_resultado",
+            "tipo_pessoa",
+            "codigo_pais",
+            "ni_fornecedor",
+            "nome_razao_social_fornecedor",
+            "quantidade_homologada",
+            "valor_unitario_homologado",
+            "valor_total_homologado",
+            "data_atualizacao_pncp",
+            "_source_file_id",
+        ],
+    )
+
+    fornecedor = transformar_resultados(bronze, "segredo")[1].first()
+
+    assert fornecedor.identificador_publico is None
+    assert fornecedor.fornecedor_id == pseudonimizar_identificador(
+        "segredo", "OUTRO|BRA|12345678901"
+    )
 
 
 def test_dimensoes_selecionam_versao_mais_recente(spark) -> None:

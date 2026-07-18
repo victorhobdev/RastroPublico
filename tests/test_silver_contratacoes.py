@@ -117,6 +117,7 @@ def test_hash_de_conteudo_ignora_metadados_tecnicos(spark) -> None:
 
     assert conflitos.count() == 0
     assert correntes.select("hash_conteudo_entidade").distinct().count() == 1
+    assert correntes.first().versao_canonicalizacao == "contratacao_v1"
 
 
 def test_empate_com_conteudo_diferente_vai_para_conflito(spark) -> None:

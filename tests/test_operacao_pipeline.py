@@ -42,3 +42,10 @@ def test_regra_bloqueante_falha_e_cobertura_apenas_alerta() -> None:
     assert erro["status"] == "FAIL"
     assert alerta["status"] == "ALERT"
     assert alerta["percentual"] == 20.0
+
+
+def test_regra_sem_populacao_nao_e_aprovada_automaticamente() -> None:
+    resultado = avaliar_regra("cobertura", 0, 0, 0, "alerta")
+
+    assert resultado["status"] == "SEM_DADOS"
+    assert resultado["percentual"] is None
