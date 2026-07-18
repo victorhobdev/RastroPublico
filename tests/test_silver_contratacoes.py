@@ -25,6 +25,9 @@ SCHEMA = StructType(
             "orgao_entidade_cnpj",
             "objeto_compra",
             "valor_total_estimado",
+            "data_publicacao_pncp",
+            "modalidade_id_pncp",
+            "modalidade_nome",
             "data_atualizacao_pncp",
             "ind_atual",
             "contratacao_excluida",
@@ -44,6 +47,9 @@ def linha(**mudancas):
         "orgao_entidade_cnpj": "12345678000199",
         "objeto_compra": "Notebook",
         "valor_total_estimado": "100.50",
+        "data_publicacao_pncp": "2026-07-15 09:00:00",
+        "modalidade_id_pncp": "6",
+        "modalidade_nome": "Pregão - Eletrônico",
         "data_atualizacao_pncp": "2026-07-15 10:00:00",
         "ind_atual": "True",
         "contratacao_excluida": "False",
@@ -77,6 +83,9 @@ def test_seleciona_versao_mais_recente_e_tipa_campos(spark) -> None:
     assert conflitos.count() == 0
     assert atual.objeto == "Atual"
     assert str(atual.valor_total_estimado) == "200.75"
+    assert atual.publicado_em.isoformat() == "2026-07-15T09:00:00"
+    assert atual.modalidade_id == "6"
+    assert atual.modalidade == "Pregão - Eletrônico"
     assert atual.ind_atual is True
     assert atual.contratacao_excluida is False
 
