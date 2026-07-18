@@ -103,6 +103,41 @@ def main() -> None:
     )
     _write(args.output / "dashboard.json", _sanitize(dashboard_evidence))
 
+    benchmark_queries = {
+        "monthly_natural": "5f047a99-e4c3-449d-b202-12972b776724",
+        "monthly_broadcast": "773bf3f5-567e-42cd-83ff-ce1ff5bd0edd",
+        "monthly_merge": "83372d70-7f85-41ca-8eb2-8050d800ef4d",
+        "annual_observed_plan": "17d2b46f-a668-4ce6-a57d-2a7713e0a851",
+    }
+    history = _cli(
+        args.profile,
+        "query-history",
+        "list",
+        "--include-metrics",
+        "--max-results",
+        "1000",
+    )
+    by_id = {query["query_id"]: query for query in history["res"]}
+    missing = set(benchmark_queries.values()) - by_id.keys()
+    if missing:
+        raise RuntimeError(f"consultas de benchmark ausentes do historico: {missing}")
+    query_evidence = {}
+    for label, query_id in benchmark_queries.items():
+        query = by_id[query_id]
+        query_evidence[label] = {
+            key: query.get(key)
+            for key in (
+                "query_id",
+                "status",
+                "client_application",
+                "query_start_time_ms",
+                "query_end_time_ms",
+                "rows_produced",
+                "metrics",
+            )
+        }
+    _write(args.output / "query-history-benchmarks.json", query_evidence)
+
 
 if __name__ == "__main__":
     main()
