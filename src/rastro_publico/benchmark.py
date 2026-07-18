@@ -79,6 +79,12 @@ def build_explain_sql(strategy: str, run_label: str) -> str:
     return f"EXPLAIN FORMATTED\n{build_benchmark_sql(strategy, run_label)}"
 
 
+def canonical_plan(rows: list[list[object]]) -> str:
+    if any(len(row) != 1 for row in rows):
+        raise ValueError("EXPLAIN deve retornar uma coluna")
+    return "\n".join(str(row[0]) for row in rows)
+
+
 def canonical_benchmark_result(rows: list[list[object]]) -> tuple[str | None, ...]:
     if len(rows) != 1 or len(rows[0]) != 6:
         raise ValueError("resultado do benchmark deve conter uma linha e seis colunas")

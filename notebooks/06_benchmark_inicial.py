@@ -20,6 +20,7 @@ from rastro_publico.benchmark import (  # noqa: E402
     build_benchmark_sql,
     build_explain_sql,
     canonical_benchmark_result,
+    canonical_plan,
 )
 
 
@@ -30,12 +31,14 @@ if repeticoes != 4:
     raise ValueError("benchmark inicial exige um aquecimento e tres medidas")
 
 strategies = ["natural", "broadcast", "merge"] if strategy == "all" else [strategy]
+initial_plans = {}
 for current_strategy in strategies:
     initial_plan = spark.sql(
         build_explain_sql(current_strategy, f"plano-{run_label}-{current_strategy}")
     )
+    initial_plans[current_strategy] = canonical_plan(initial_plan.collect())
     print(f"PLANO_INICIAL strategy={current_strategy}")
-    print("\n".join(row[0] for row in initial_plan.collect()))
+    print(initial_plans[current_strategy])
 
 sequence = [(current_strategy, 0, True) for current_strategy in strategies]
 if strategy == "all":
@@ -81,6 +84,7 @@ output = {
     "strategy": strategy,
     "run_label": run_label,
     "result": canonical_result,
+    "initial_plans": initial_plans,
     "executions": executions,
 }
 print(json.dumps(output, ensure_ascii=False))

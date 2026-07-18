@@ -6,6 +6,7 @@ from rastro_publico.benchmark import (
     build_benchmark_sql,
     build_explain_sql,
     canonical_benchmark_result,
+    canonical_plan,
 )
 
 
@@ -43,6 +44,12 @@ def test_explain_wraps_the_same_query() -> None:
 
     assert build_explain_sql("broadcast", "plano-inicial") == (
         f"EXPLAIN FORMATTED\n{query}"
+    )
+
+
+def test_canonical_plan_preserves_explain_output() -> None:
+    assert canonical_plan([["Physical Plan"], ["BroadcastHashJoin"]]) == (
+        "Physical Plan\nBroadcastHashJoin"
     )
 
 
