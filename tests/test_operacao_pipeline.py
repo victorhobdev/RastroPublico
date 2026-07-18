@@ -27,7 +27,9 @@ def test_watermark_nao_avanca_fora_do_incremental(modo: str) -> None:
 def test_watermark_so_avanca_apos_incremental_integral() -> None:
     anterior = date(2026, 7, 15)
 
-    assert decidir_watermark(anterior, date(2026, 7, 16), "incremental", False) == anterior
+    assert (
+        decidir_watermark(anterior, date(2026, 7, 16), "incremental", False) == anterior
+    )
     assert decidir_watermark(anterior, date(2026, 7, 16), "incremental", True) == date(
         2026, 7, 16
     )
