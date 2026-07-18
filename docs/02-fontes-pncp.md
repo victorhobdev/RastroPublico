@@ -274,3 +274,22 @@ O Bloco 0 observou `200`, `204`, `301`, `400`, `404`, `422` e `429`. O `429` nã
 - capacidade de transferir e processar 12 meses dentro da quota do Databricks Free.
 
 O acesso de saída foi resolvido: `pncp.gov.br` não é resolvido pelo compute serverless atual, enquanto domínio Databricks permitido resolve normalmente. A coleta será local e a transferência ao workspace será validada no Bloco 1. Os itens restantes não devem ser resolvidos por suposição.
+
+## 13. Confirmações após a execução anual
+
+- a API PNCP voltou a responder localmente e foi usada para modalidades,
+  capacidades e vínculos; o impedimento histórico não virou dependência de
+  egress do compute;
+- a coleta principal de volume usou snapshots anuais oficiais de Compras.gov e
+  Comprasnet para 2025 e 2026;
+- 12 arquivos foram fragmentados em 39 CSVs lógicos e 39 manifestos, totalizando
+  9.028.123.353 bytes no HD e no Volume;
+- a janela resultou em 318.911 contratações Bronze e 53.544 contratos Bronze;
+- foram observados 5 códigos de modalidade e 11 rótulos no canal anual, contra
+  19 modalidades ativas recuperadas no domínio PNCP;
+- a cobertura integral do PNCP termina como `não publicável`, e o vínculo
+  contratação–contrato foi confirmado como parcial (`C3`).
+
+Os limites formais de throttling e a representação universal de exclusões
+continuam desconhecidos, mas não bloqueiam a versão executada porque a carga
+anual aprovada, os detalhes e as capacidades necessárias foram medidos.

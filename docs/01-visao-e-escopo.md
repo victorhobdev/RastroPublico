@@ -223,3 +223,17 @@ Termos recomendados:
 - qualidade ou cobertura da informação.
 
 Termos como fraude, corrupção, superfaturamento ou irregularidade só podem aparecer para explicar o que o produto **não** conclui.
+
+## 11. Situação executada da versão 1
+
+Em 18 de julho de 2026, os 15 blocos de construção foram executados. A janela
+materializada cobre `2025-07-18` a `2026-07-17` no canal oficial anual
+Compras.gov/Comprasnet aprovado. O dashboard Databricks AI/BI é a interface de
+consumo e as evidências estáticas estão em `docs/assets`.
+
+A amplitude analítica foi mantida, mas a evidência corrigiu a promessa de
+cobertura: o canal anual contém um subconjunto das modalidades PNCP. A cobertura
+nacional completa e a comparação de preços terminam como `não publicável`;
+concentração, recorrência, presença, evolução contratual, rede e qualidade foram
+publicadas dentro do recorte medido. O vínculo contratual parcial permanece
+visível como cenário `C3`.

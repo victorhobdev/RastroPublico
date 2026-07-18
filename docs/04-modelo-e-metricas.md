@@ -292,18 +292,38 @@ Cada indicador deve ser efetivamente avaliado e terminar como `publicado` ou `n�
 - contagens Gold reconciliam com a população Silver elegível;
 - amostras são conferidas no portal oficial.
 
-## 11. Decisões ainda abertas
+## 11. Decisões fechadas após o perfil completo
 
-- campos definitivos de cada entidade;
-- identificador canônico quando o número de controle estiver ausente;
-- tratamento de fornecedor estrangeiro;
-- segredo e estratégia operacional de pseudonimização;
-- vocabulário e códigos exatos da taxonomia tecnológica;
-- tolerância decimal para reconciliação;
-- regra de unidade equivalente;
-- população elegível de cada situação de item/resultado/contrato;
-- cobertura mínima para publicar cada indicador;
-- granularidade temporal padrão;
-- capacidade real de medir variação de valor por evento contratual.
+- o número de controle PNCP é a origem preferida das chaves; ausências usam a
+  chave natural específica da entidade e seguem para quarentena se não houver
+  identidade defensável;
+- fornecedores com identificador público recebem chave determinística; CPF não
+  é exposto na Gold e o contexto CNPJ/QSA só enriquece pessoas jurídicas;
+- a taxonomia versionada separa equipamentos, serviços e `incerto`; classificação
+  não confirmada permanece visível;
+- reconciliação financeira usa `Decimal` e participações são limitadas ao
+  intervalo `[0,1]` após revelar arredondamento de soma em Spark;
+- unidade equivalente não é inferida por texto: os 93 grupos de preço avaliados
+  terminam `não publicável`;
+- concentração exige pelo menos dois fornecedores, três resultados e cobertura
+  mínima de 0,8 para publicação;
+- o período padrão é mensal dentro da janela móvel encerrada em D-1;
+- evolução contratual foi publicada com eventos observados, mas a ligação entre
+  contratação e contrato permanece explicitamente parcial (`C3`).
 
-Essas decisões dependem do perfil dos dados e devem ser fechadas antes da tabela correspondente, não antes do spike.
+## 12. Estado materializado dos indicadores
+
+| Indicador | Linhas | Estado final |
+| --- | ---: | --- |
+| qualidade/cobertura | 538 | `publicada` |
+| concentração | 8.564 | 1.072 `publicada`; 7.492 `não publicável` |
+| serviços/cobertura | 6 | `publicada` como cobertura |
+| recorrência órgão–fornecedor | 11.548 | `publicada` |
+| presença pública | 5.790 | `publicada` |
+| variação de preços | 93 | `não publicável` |
+| evolução contratual | 52.767 | `publicada` com limitação C3 |
+| rede órgão–fornecedor | 11.548 | `publicada` |
+| contexto de fornecedores | 94.168 | `publicada` |
+
+As contagens refletem a execução de 18 de julho de 2026 e devem ser novamente
+medidas a cada recorte, não usadas como constantes de negócio.

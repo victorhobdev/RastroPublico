@@ -444,22 +444,40 @@ Chamadas reais ao PNCP não serão obrigatórias na CI.
 - fornecedor pessoa física recebe chave pseudonimizada estável para análise;
 - dados públicos continuam sujeitos a uso responsável e minimização.
 
-## 14. Estrutura prevista do repositório
+## 14. Estrutura executada do repositório
 
-Esta estrutura é uma previsão para a fase de implementação, não está autorizada por este documento:
+A versão 1 usa a seguinte estrutura mínima:
 
 ```text
 docs/
 src/rastro_publico/
   coleta/
   transformacoes/
-  qualidade/
-  metricas/
 notebooks/
 tests/
-resources/
-databricks.yml
 pyproject.toml
+uv.lock
 ```
 
-Diretórios só serão criados quando o primeiro bloco precisar deles. Não haverá camada genérica, interface ou pacote vazio “para o futuro”.
+Não foram criados pacotes vazios, frontend, API, Airflow, dbt ou infraestrutura
+como código sem necessidade demonstrada. A configuração operacional dos jobs
+permanece no Databricks e seus parâmetros executados estão registrados no
+runbook e nos relatórios.
+
+## 15. Situação operacional final
+
+- dados locais volumosos: `D:\RastroPublico`, fora do Git;
+- landing: Volume gerenciado `workspace.rastro_publico_dev.landing`;
+- execução anual: job `399795155769573`, seis tarefas encadeadas, retry e
+  concorrência máxima igual a um;
+- benchmark: job `79177278313280`;
+- consumo: SQL Warehouse `c8b5924d51fcc1e2` e dashboard
+  `01f182507d3519de8cd5931bef2d613f`;
+- runtime observado: Python 3.10.12 e Spark 4.1.0 serverless; testes locais em
+  Python 3.12 e PySpark 4.2.0, usando somente APIs compatíveis;
+- organização física mantida sem particionamento ou clustering após benchmark:
+  39 arquivos nas duas fatos principais, zero spill e nenhum ganho comprovado
+  para compactação ou hints fixos.
+
+O diagrama, a cadeia de dependências e o procedimento de recuperação executados
+estão consolidados em `20-arquitetura-final.md` e `21-runbook-operacional.md`.
