@@ -264,3 +264,27 @@ def calcular_concentracao_fornecedores(
             when(col("limitacao").isNull(), "publicada").otherwise("nao_publicavel"),
         )
     )
+
+
+def calcular_cobertura_servicos(itens: DataFrame) -> DataFrame:
+    return (
+        itens.where(
+            col("categoria_servico").isNotNull()
+            & (col("categoria_servico") != "incerto")
+        )
+        .groupBy("categoria_servico")
+        .agg(
+            countDistinct("item_id").alias("total_itens"),
+            countDistinct(
+                when(col("unidade_medida").isNotNull(), col("item_id"))
+            ).alias("itens_com_unidade"),
+            countDistinct(
+                when(col("valor_unitario_estimado").isNotNull(), col("item_id"))
+            ).alias("itens_com_preco"),
+            countDistinct("unidade_medida").alias("unidades_distintas"),
+        )
+        .withColumn("cobertura_unidade", col("itens_com_unidade") / col("total_itens"))
+        .withColumn("cobertura_preco", col("itens_com_preco") / col("total_itens"))
+        .withColumn("status_publicacao_preco", lit("nao_publicavel"))
+        .withColumn("limitacao_preco", lit("escopo_unidade_sla_nao_estruturados"))
+    )

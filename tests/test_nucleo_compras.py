@@ -7,6 +7,7 @@ from pyspark.sql.functions import lit
 
 from rastro_publico.transformacoes.nucleo import (
     classificar_equipamentos,
+    classificar_servicos,
     pseudonimizar_identificador,
     transformar_dimensoes,
     transformar_itens,
@@ -438,3 +439,57 @@ def test_classificacao_rejeita_servico_mesmo_com_nome_de_equipamento(spark) -> N
     )
 
     assert classificar_equipamentos(itens).first().categoria_tecnologia == "incerto"
+
+
+@pytest.mark.parametrize(
+    ("descricao", "categoria"),
+    [
+        ("Software como Serviço - SaaS", "cloud"),
+        ("Licenciamento de direitos permanentes de uso de software", "licenciamento"),
+        ("Desenvolvimento de novo software - outras linguagens", "desenvolvimento"),
+        ("Outsourcing de impressão - páginas A4", "outsourcing"),
+        ("Serviços de suporte técnico de tecnologia da informação", "suporte"),
+        (
+            "Outros serviços para a infraestrutura de tecnologia da informação e comunicação",
+            "infraestrutura",
+        ),
+    ],
+)
+def test_classificacao_servicos_cobre_familias_planejadas(
+    spark, descricao, categoria
+) -> None:
+    itens = spark.createDataFrame(
+        [("item-1", descricao, "S", "incerto")],
+        ["item_id", "descricao", "material_ou_servico", "categoria_tecnologia"],
+    )
+
+    classificado = classificar_servicos(itens).first()
+
+    assert classificado.categoria_servico == categoria
+    assert classificado.categoria_tecnologia == f"servico_{categoria}"
+    assert classificado.status_preco_servico == "nao_publicavel"
+    assert classificado.versao_regra_servico == "servicos_v1"
+
+
+@pytest.mark.parametrize(
+    "descricao",
+    [
+        "Coleta por satélite com imagens entregues em nuvem",
+        "Reserva em hotéis nacionais e internacionais",
+        "Manutenção de extintores e mangueiras",
+        "Seminário integrante da programação alusiva ao mês do servidor",
+        "Serviço de vigilância por posto de trabalho",
+        "Programação de equipamento telefônico",
+    ],
+)
+def test_classificacao_servicos_rejeita_contextos_observados(spark, descricao) -> None:
+    itens = spark.createDataFrame(
+        [("item-1", descricao, "S", "incerto")],
+        ["item_id", "descricao", "material_ou_servico", "categoria_tecnologia"],
+    )
+
+    classificado = classificar_servicos(itens).first()
+
+    assert classificado.categoria_servico == "incerto"
+    assert classificado.categoria_tecnologia == "incerto"
+    assert classificado.status_preco_servico == "fora_escopo"

@@ -5,6 +5,7 @@ import pytest
 from pyspark.sql import SparkSession
 
 from rastro_publico.transformacoes.gold import (
+    calcular_cobertura_servicos,
     calcular_concentracao_fornecedores,
     calcular_qualidade_cobertura,
 )
@@ -149,3 +150,28 @@ def test_concentracao_nao_publica_grupo_sem_populacao_minima(spark) -> None:
 
     assert gold.status_publicacao == "nao_publicavel"
     assert gold.limitacao == "fornecedores_insuficientes"
+
+
+def test_cobertura_servicos_mantem_preco_nao_publicavel(spark) -> None:
+    itens = spark.createDataFrame(
+        [
+            ("i1", "cloud", "UNIDADE", 100.0, "nao_publicavel"),
+            ("i2", "cloud", "MÊS", 200.0, "nao_publicavel"),
+            ("i3", "suporte", "HORA", None, "nao_publicavel"),
+        ],
+        [
+            "item_id",
+            "categoria_servico",
+            "unidade_medida",
+            "valor_unitario_estimado",
+            "status_preco_servico",
+        ],
+    )
+
+    cobertura = calcular_cobertura_servicos(itens)
+    cloud = cobertura.where("categoria_servico = 'cloud'").first()
+
+    assert cloud.total_itens == 2
+    assert cloud.unidades_distintas == 2
+    assert cloud.itens_com_preco == 2
+    assert cloud.status_publicacao_preco == "nao_publicavel"

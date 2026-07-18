@@ -28,6 +28,7 @@ sys.path.insert(0, source_root)
 from rastro_publico.operacao import avaliar_regra, decidir_watermark, janela_incremental
 from rastro_publico.transformacoes.nucleo import (
     classificar_equipamentos,
+    classificar_servicos,
     transformar_dimensoes,
     transformar_itens,
     transformar_resultados,
@@ -76,7 +77,7 @@ bronze_resultados = spark.table("workspace.bronze.resultados_raw")
 bronze_contratacoes = spark.table("workspace.bronze.contratacoes_raw")
 
 itens, itens_quarentena, itens_conflitos = transformar_itens(bronze_itens)
-itens = classificar_equipamentos(itens)
+itens = classificar_servicos(classificar_equipamentos(itens))
 resultados, fornecedores, resultados_quarentena, resultados_conflitos = (
     transformar_resultados(
         bronze_resultados,

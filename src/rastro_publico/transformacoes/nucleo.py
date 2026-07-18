@@ -15,6 +15,7 @@ from pyspark.sql.functions import (
     struct,
     to_json,
     to_timestamp,
+    translate,
     trim,
     udf,
     when,
@@ -321,6 +322,106 @@ def classificar_equipamentos(itens: DataFrame) -> DataFrame:
     )
     return itens.withColumn("categoria_tecnologia", categoria).withColumn(
         "versao_regra", lit("equipamentos_v2")
+    )
+
+
+def classificar_servicos(itens: DataFrame) -> DataFrame:
+    texto = regexp_replace(
+        translate(
+            lower(trim(col("descricao"))),
+            "áàâãäéèêëíìîïóòôõöúùûüç",
+            "aaaaaeeeeiiiiooooouuuuc",
+        ),
+        r"\s+",
+        " ",
+    )
+    servico = col("material_ou_servico") == "S"
+    categoria = (
+        when(
+            servico
+            & texto.rlike(
+                r"^(software como servico\s*-?\s*saas|servicos? de computacao "
+                r"em nuvem|computacao em nuvem|infraestrutura como servico|"
+                r"plataforma como servico|servicos? em nuvem)\b"
+            ),
+            "cloud",
+        )
+        .when(
+            servico
+            & texto.rlike(
+                r"^(cessao temporaria de direitos sobre programas? de computador|"
+                r"licenciamento de direitos|licenca(?:mento)? de (?:uso de )?"
+                r"(?:software|programas? de computador)|subscricao de software)\b"
+            ),
+            "licenciamento",
+        )
+        .when(
+            servico
+            & texto.rlike(
+                r"^(desenvolvimento de novo software|servicos? de desenvolvimento "
+                r"de (?:software|sistemas?|aplicativos?)|fabrica de software)\b"
+            ),
+            "desenvolvimento",
+        )
+        .when(
+            servico
+            & texto.rlike(
+                r"^outsourcing (?:de impressao|de ti|de tecnologia|"
+                r"de infraestrutura|de servicos?)\b"
+            ),
+            "outsourcing",
+        )
+        .when(
+            servico
+            & texto.rlike(
+                r"^(servicos? de suporte tecnico (?:de|em) (?:tecnologia da "
+                r"informacao|tic|informatica)|suporte tecnico (?:de|em) "
+                r"(?:tecnologia da informacao|tic|informatica)|manutencao "
+                r"(?:evolutiva )?de software|servicos? de manutencao e reparacao "
+                r"de computadores)\b"
+            ),
+            "suporte",
+        )
+        .when(
+            servico
+            & texto.rlike(
+                r"^(outros servicos para a infraestrutura de tecnologia da "
+                r"informacao e comunicacao|servicos? de gerenciamento de "
+                r"infraestrutura de tecnologia da ?informacao|servicos? de "
+                r"hospedagem de sistemas|servicos? de data ?center|servico de "
+                r"infraestrutura de redes? de comunicacao de dados|instalacao de "
+                r"cabeamento estruturado)\b"
+            ),
+            "infraestrutura",
+        )
+        .when(servico, "incerto")
+    )
+    return (
+        itens.withColumn("categoria_servico", categoria)
+        .withColumn(
+            "categoria_tecnologia",
+            when(
+                col("categoria_servico").isNotNull()
+                & (col("categoria_servico") != "incerto"),
+                concat(lit("servico_"), col("categoria_servico")),
+            ).otherwise(col("categoria_tecnologia")),
+        )
+        .withColumn(
+            "status_preco_servico",
+            when(
+                col("categoria_servico").isNotNull()
+                & (col("categoria_servico") != "incerto"),
+                "nao_publicavel",
+            ).when(servico, "fora_escopo"),
+        )
+        .withColumn(
+            "motivo_preco_servico",
+            when(
+                col("status_preco_servico") == "nao_publicavel",
+                "escopo_unidade_sla_nao_estruturados",
+            ).when(servico, "familia_nao_identificada"),
+        )
+        .withColumn("versao_regra_servico", lit("servicos_v1"))
     )
 
 

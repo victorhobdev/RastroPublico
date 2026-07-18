@@ -16,6 +16,7 @@ sys.path.insert(0, source_root)
 
 from rastro_publico.transformacoes.gold import (
     calcular_concentracao_fornecedores,
+    calcular_cobertura_servicos,
     calcular_qualidade_cobertura,
 )
 
@@ -42,6 +43,7 @@ concentracao = calcular_concentracao_fornecedores(
     minimo_resultados=minimo_resultados,
     cobertura_minima=cobertura_minima,
 )
+servicos = calcular_cobertura_servicos(itens)
 
 violacoes = concentracao.where(
     "top_1 < 0 OR top_1 > top_3 OR top_3 > 1 OR hhi < 0 OR hhi > 1 "
@@ -144,6 +146,9 @@ qualidade.write.format("delta").mode("overwrite").option(
 concentracao.write.format("delta").mode("overwrite").option(
     "overwriteSchema", "true"
 ).saveAsTable("workspace.gold.concentracao_fornecedores")
+servicos.write.format("delta").mode("overwrite").option(
+    "overwriteSchema", "true"
+).saveAsTable("workspace.gold.servicos_cobertura")
 
 resumo = concentracao.agg(
     {"valor_total_homologado": "sum", "resultados_elegiveis": "sum"}
@@ -162,6 +167,10 @@ print(
             ).count(),
             "concentracao_nao_publicaveis": concentracao.where(
                 "status_publicacao = 'nao_publicavel'"
+            ).count(),
+            "servicos_categorias": servicos.count(),
+            "servicos_precos_publicados": servicos.where(
+                "status_publicacao_preco = 'publicada'"
             ).count(),
             "valor_total_gold": total_gold,
             "equivalencia_sql_divergencias": equivalencia_sql,
