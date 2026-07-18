@@ -51,70 +51,8 @@ def _text(name: str, lines: list[str], x: int, y: int, width: int, height: int):
     }
 
 
-def _category_chart():
-    fields = [
-        {"name": "Categoria", "expression": "`categoria`"},
-        {"name": "Itens", "expression": "`itens`"},
-    ]
-    return {
-        "widget": {
-            "name": "categorias_itens",
-            "queries": [
-                {
-                    "name": "main_query",
-                    "query": {
-                        "datasetName": "categorias_auditadas",
-                        "fields": fields,
-                        "disaggregated": True,
-                    },
-                }
-            ],
-            "spec": {
-                "version": 3,
-                "widgetType": "bar",
-                "encodings": {
-                    "x": {
-                        "fieldName": "Categoria",
-                        "displayName": "Categoria",
-                        "scale": {"type": "categorical"},
-                        "axis": {"title": "Categoria"},
-                    },
-                    "y": {
-                        "fieldName": "Itens",
-                        "displayName": "Itens distintos",
-                        "scale": {"type": "quantitative"},
-                        "axis": {"title": "Itens distintos"},
-                    },
-                    "label": {"show": True},
-                },
-                "frame": {
-                    "showTitle": True,
-                    "title": "Onde estão os itens classificados?",
-                },
-                "mark": {"colors": ["#2563EB"]},
-            },
-        },
-        "position": {"x": 0, "y": 8, "width": 8, "height": 8},
-    }
-
-
 def build_dashboard() -> dict[str, Any]:
-    datasets = [
-        {
-            "name": "categorias_auditadas",
-            "displayName": "Itens de tecnologia por categoria",
-            "queryLines": [
-                "SELECT * FROM VALUES\n",
-                "('Licenciamento', 7445), ('Computadores e notebooks', 4607),\n",
-                "('Impressoras e scanners', 3167), ('Redes', 2739),\n",
-                "('Outsourcing', 2649), ('Cloud', 2607),\n",
-                "('Infraestrutura', 1872), ('Monitores', 1800),\n",
-                "('Suporte', 1243), ('Servidores', 737),\n",
-                "('Desenvolvimento', 341) AS categorias(categoria, itens)\n",
-                "ORDER BY itens DESC",
-            ],
-        }
-    ]
+    datasets: list[dict[str, Any]] = []
     executive = {
         "name": "visao_executiva",
         "displayName": "Visão executiva",
@@ -126,8 +64,7 @@ def build_dashboard() -> dict[str, Any]:
                 [
                     "# RastroPúblico — compras públicas de tecnologia\n",
                     "**Quem compra, quem fornece e quais relações se repetem.**  \n",
-                    "Brasil · **18 jul. 2025 a 17 jul. 2026** · Compras.gov e Comprasnet  \n",
-                    "Os sinais apoiam investigação e não classificam fraude ou irregularidade.",
+                    "Brasil · **18 jul. 2025 a 17 jul. 2026** · Compras.gov e Comprasnet · Sem classificação de fraude ou irregularidade.",
                 ],
                 0,
                 0,
@@ -186,9 +123,24 @@ def build_dashboard() -> dict[str, Any]:
                 0,
                 4,
                 12,
-                4,
+                3,
             ),
-            _category_chart(),
+            _text(
+                "categorias_itens",
+                [
+                    "## Distribuição dos itens classificados\n",
+                    "- **Licenciamento:** 7.445 · **Computadores e notebooks:** 4.607\n",
+                    "- **Impressoras e scanners:** 3.167 · **Redes:** 2.739\n",
+                    "- **Outsourcing:** 2.649 · **Cloud:** 2.607\n",
+                    "- **Infraestrutura:** 1.872 · **Monitores:** 1.800\n",
+                    "- **Suporte:** 1.243 · **Servidores:** 737\n",
+                    "- **Desenvolvimento:** 341",
+                ],
+                0,
+                7,
+                8,
+                6,
+            ),
             _text(
                 "recorrencia",
                 [
@@ -197,9 +149,9 @@ def build_dashboard() -> dict[str, Any]:
                     "\nPode refletir especialização, contratos sucessivos ou demanda continuada.",
                 ],
                 8,
-                8,
+                7,
                 4,
-                4,
+                3,
             ),
             _text(
                 "precos",
@@ -209,7 +161,7 @@ def build_dashboard() -> dict[str, Any]:
                     "\nA ausência do ranking é um resultado de qualidade.",
                 ],
                 8,
-                12,
+                10,
                 4,
                 4,
             ),
@@ -364,7 +316,10 @@ def main() -> None:
     args = parser.parse_args()
     dashboard = build_dashboard()
     validate_dashboard(dashboard)
-    print("Definição válida: 2 páginas, 17 widgets e 1 dataset auditado.")
+    widget_count = sum(len(page["layout"]) for page in dashboard["pages"])
+    print(
+        f"Definição válida: 2 páginas, {widget_count} widgets, sem consulta ao compute."
+    )
     if not args.apply:
         return
 

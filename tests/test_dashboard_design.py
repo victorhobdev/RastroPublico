@@ -16,9 +16,7 @@ def test_dashboard_uses_only_audited_portfolio_metrics() -> None:
         assert expected in serialized
     for invalidated in ("317.043", "2,63 milhões", "106.494", "52.767", "11.548"):
         assert invalidated not in serialized
-    assert {dataset["name"] for dataset in dashboard["datasets"]} == {
-        "categorias_auditadas"
-    }
+    assert dashboard["datasets"] == []
 
 
 def test_dashboard_does_not_publish_monetary_rankings() -> None:
