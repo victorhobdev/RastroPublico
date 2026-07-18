@@ -7,6 +7,7 @@ from pyspark.sql import SparkSession
 from rastro_publico.transformacoes.nucleo import (
     classificar_equipamentos,
     pseudonimizar_identificador,
+    transformar_dimensoes,
     transformar_itens,
     transformar_resultados,
 )
@@ -148,6 +149,35 @@ def test_resultado_remove_cpf_e_mantem_vinculo(spark) -> None:
     )
     assert quarentena.count() == 0
     assert conflitos.count() == 0
+
+
+def test_dimensoes_selecionam_versao_mais_recente(spark) -> None:
+    bronze = spark.createDataFrame(
+        [
+            ("123", "Órgão antigo", "F", "E", "10", "Unidade antiga", "RJ", "Rio", "3304557", "2026-07-14", "a1"),
+            ("123", "Órgão atual", "F", "E", "10", "Unidade atual", "RJ", "Rio", "3304557", "2026-07-15", "a2"),
+        ],
+        [
+            "orgao_entidade_cnpj",
+            "orgao_entidade_razao_social",
+            "orgao_entidade_esfera_id",
+            "orgao_entidade_poder_id",
+            "unidade_orgao_codigo_unidade",
+            "unidade_orgao_nome_unidade",
+            "unidade_orgao_uf_sigla",
+            "unidade_orgao_municipio_nome",
+            "unidade_orgao_codigo_ibge",
+            "data_atualizacao_pncp",
+            "_source_file_id",
+        ],
+    )
+
+    orgaos, unidades = transformar_dimensoes(bronze)
+
+    assert orgaos.count() == 1
+    assert orgaos.first().nome_orgao == "Órgão atual"
+    assert unidades.count() == 1
+    assert unidades.first().nome_unidade == "Unidade atual"
 
 
 @pytest.mark.parametrize(
