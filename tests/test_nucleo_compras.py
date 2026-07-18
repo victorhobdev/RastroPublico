@@ -10,6 +10,7 @@ from rastro_publico.transformacoes.nucleo import (
     transformar_dimensoes,
     transformar_itens,
     transformar_resultados,
+    transformar_vinculos_contratacao,
 )
 
 
@@ -202,6 +203,25 @@ def test_dimensoes_selecionam_versao_mais_recente(spark) -> None:
     assert orgaos.first().nome_orgao == "Órgão atual"
     assert unidades.count() == 1
     assert unidades.first().nome_unidade == "Unidade atual"
+
+
+def test_vinculo_preserva_contratacao_orgao_e_unidade(spark) -> None:
+    bronze = spark.createDataFrame(
+        [("controle-1", "123", "10", "2026-07-15", "a1")],
+        [
+            "numero_controle_PNCP",
+            "orgao_entidade_cnpj",
+            "unidade_orgao_codigo_unidade",
+            "data_atualizacao_pncp",
+            "_source_file_id",
+        ],
+    )
+
+    vinculo = transformar_vinculos_contratacao(bronze).first()
+
+    assert vinculo.contratacao_id
+    assert vinculo.orgao_id
+    assert vinculo.unidade_id
 
 
 @pytest.mark.parametrize(
