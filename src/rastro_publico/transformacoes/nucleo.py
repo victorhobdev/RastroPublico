@@ -42,13 +42,9 @@ def transformar_itens(bronze: DataFrame) -> tuple[DataFrame, DataFrame, DataFram
             .cast(DecimalType(38, 4))
             .alias("valor_unitario_estimado"),
             col("valor_total").cast(DecimalType(38, 2)).alias("valor_total"),
-            trim(_coluna_ou_nulo(bronze, "situacao_compra_item_nome")).alias(
-                "situacao_item"
-            ),
             to_timestamp("data_atualizacao_pncp").alias("atualizado_em"),
             col("_source_file_id").alias("source_file_id"),
         )
-        .withColumn("cancelado", lower("situacao_item").contains("cancel"))
         .withColumn(
             "contratacao_id",
             sha2(concat(lit("pncp|"), lower("numero_controle_pncp")), 256),
@@ -88,8 +84,6 @@ def transformar_itens(bronze: DataFrame) -> tuple[DataFrame, DataFrame, DataFram
             "unidade_medida",
             "valor_unitario_estimado",
             "valor_total",
-            "situacao_item",
-            "cancelado",
             "atualizado_em",
         ],
         "item_id",

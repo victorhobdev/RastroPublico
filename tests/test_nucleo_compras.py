@@ -161,8 +161,34 @@ def test_item_mais_novo_substitui_versao_antiga(spark) -> None:
 def test_situacao_fisica_divergente_nao_cria_conflito_de_item(spark) -> None:
     bronze = spark.createDataFrame(
         [
-            ("i1", "controle-1", "1", "Notebook", "M", "1", "UN", "100", "100", "Homologado", "2026-07-15", "a1"),
-            ("i1", "controle-1", "1", "Notebook", "M", "1", "UN", "100", "100", "Em andamento", "2026-07-15", "a1"),
+            (
+                "i1",
+                "controle-1",
+                "1",
+                "Notebook",
+                "M",
+                "1",
+                "UN",
+                "100",
+                "100",
+                "Homologado",
+                "2026-07-15",
+                "a1",
+            ),
+            (
+                "i1",
+                "controle-1",
+                "1",
+                "Notebook",
+                "M",
+                "1",
+                "UN",
+                "100",
+                "100",
+                "Em andamento",
+                "2026-07-15",
+                "a1",
+            ),
         ],
         [
             "id_compra_item",
