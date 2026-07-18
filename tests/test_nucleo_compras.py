@@ -118,8 +118,36 @@ def test_item_mais_novo_substitui_versao_antiga_e_preserva_situacao(spark) -> No
     ]
     bronze = spark.createDataFrame(
         [
-            ("i1", "controle-1", "1", "Notebook", "", "M", "1", "UN", "100", "100", "Ativo", "2026-07-14", "a1"),
-            ("i1", "controle-1", "1", "Notebook", "", "M", "2", "UN", "100", "200", "Cancelado", "2026-07-15", "a2"),
+            (
+                "i1",
+                "controle-1",
+                "1",
+                "Notebook",
+                "",
+                "M",
+                "1",
+                "UN",
+                "100",
+                "100",
+                "Ativo",
+                "2026-07-14",
+                "a1",
+            ),
+            (
+                "i1",
+                "controle-1",
+                "1",
+                "Notebook",
+                "",
+                "M",
+                "2",
+                "UN",
+                "100",
+                "200",
+                "Cancelado",
+                "2026-07-15",
+                "a2",
+            ),
         ],
         colunas,
     )

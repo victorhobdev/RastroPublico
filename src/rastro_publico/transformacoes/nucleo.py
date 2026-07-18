@@ -42,9 +42,13 @@ def transformar_itens(bronze: DataFrame) -> tuple[DataFrame, DataFrame, DataFram
             .cast(DecimalType(38, 4))
             .alias("valor_unitario_estimado"),
             col("valor_total").cast(DecimalType(38, 2)).alias("valor_total"),
+            trim(_coluna_ou_nulo(bronze, "situacao_compra_item_nome")).alias(
+                "situacao_item"
+            ),
             to_timestamp("data_atualizacao_pncp").alias("atualizado_em"),
             col("_source_file_id").alias("source_file_id"),
         )
+        .withColumn("cancelado", lower("situacao_item").contains("cancel"))
         .withColumn(
             "contratacao_id",
             sha2(concat(lit("pncp|"), lower("numero_controle_pncp")), 256),
@@ -84,6 +88,8 @@ def transformar_itens(bronze: DataFrame) -> tuple[DataFrame, DataFrame, DataFram
             "unidade_medida",
             "valor_unitario_estimado",
             "valor_total",
+            "situacao_item",
+            "cancelado",
             "atualizado_em",
         ],
         "item_id",
@@ -120,8 +126,22 @@ def transformar_resultados(
             col("valor_total_homologado")
             .cast(DecimalType(38, 2))
             .alias("valor_total_homologado"),
+            to_timestamp(_coluna_ou_nulo(bronze, "data_cancelamento_pncp")).alias(
+                "cancelado_em"
+            ),
+            trim(_coluna_ou_nulo(bronze, "motivo_cancelamento")).alias(
+                "motivo_cancelamento"
+            ),
+            trim(_coluna_ou_nulo(bronze, "situacao_compra_item_resultado_nome")).alias(
+                "situacao_resultado"
+            ),
             to_timestamp("data_atualizacao_pncp").alias("atualizado_em"),
             col("_source_file_id").alias("source_file_id"),
+        )
+        .withColumn(
+            "cancelado",
+            col("cancelado_em").isNotNull()
+            | lower("situacao_resultado").contains("cancel"),
         )
         .withColumn(
             "contratacao_id",
@@ -174,6 +194,10 @@ def transformar_resultados(
             "quantidade_homologada",
             "valor_unitario_homologado",
             "valor_total_homologado",
+            "cancelado_em",
+            "motivo_cancelamento",
+            "situacao_resultado",
+            "cancelado",
             "atualizado_em",
         ],
         "resultado_id",
@@ -347,3 +371,7 @@ def _mais_recente(dados: DataFrame, chave: str) -> DataFrame:
         .where("_ordem = 1")
         .drop("_ordem")
     )
+
+
+def _coluna_ou_nulo(dados: DataFrame, nome: str):
+    return col(nome) if nome in dados.columns else lit(None).cast("string")
