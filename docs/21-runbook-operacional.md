@@ -34,6 +34,15 @@ $env:SPARK_LOCAL_IP = "127.0.0.1"
 R:\.venv\Scripts\python.exe -m pytest
 ```
 
+Recálculo PySpark da baseline corrigida, sem depender do workspace:
+
+```powershell
+R:\.venv\Scripts\python.exe scripts\audit_corrected_kpis.py `
+  --root D:\RastroPublico\data\block11\anual\2025-2026 `
+  --data-inicio 2025-07-18 --data-fim 2026-07-17 `
+  --output D:\RastroPublico\artifacts\corrected-kpis-20260718.json
+```
+
 ## 2. Parâmetros da execução de referência
 
 | Parâmetro | Valor |
