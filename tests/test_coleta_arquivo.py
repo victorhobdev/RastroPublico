@@ -62,3 +62,20 @@ def test_falha_nao_substitui_arquivo_existente(tmp_path) -> None:
 
     assert destino.read_bytes() == b"anterior"
     assert not destino.with_suffix(".csv.part").exists()
+
+
+def test_resposta_vazia_nao_vira_arquivo_valido(tmp_path) -> None:
+    destino = tmp_path / "itens.csv"
+
+    with pytest.raises(ValueError, match="arquivo menor que 1 bytes"):
+        baixar_arquivo(
+            url="https://dados.example/itens.csv",
+            destino=destino,
+            sistema_origem="comprasgov",
+            dataset_origem="VW_FT_PNCP_COMPRA_ITEM",
+            run_id="run-3",
+            abrir=lambda *_args, **_kwargs: Resposta(b""),
+        )
+
+    assert not destino.exists()
+    assert not destino.with_suffix(".csv.manifest.json").exists()
