@@ -16,14 +16,21 @@ from pyspark.sql.functions import (
 from pyspark.sql.types import DecimalType
 
 
-def transformar_contratacoes(bronze: DataFrame) -> tuple[DataFrame, DataFrame, DataFrame]:
+def transformar_contratacoes(
+    bronze: DataFrame,
+) -> tuple[DataFrame, DataFrame, DataFrame]:
     tipadas = (
         bronze.select(
             trim(col("id_compra")).alias("id_origem"),
             trim(col("numero_controle_PNCP")).alias("numero_controle_pncp"),
             trim(col("orgao_entidade_cnpj")).alias("cnpj_orgao"),
             trim(col("objeto_compra")).alias("objeto"),
-            col("valor_total_estimado").cast(DecimalType(38, 2)).alias("valor_total_estimado"),
+            col("valor_total_estimado")
+            .cast(DecimalType(38, 2))
+            .alias("valor_total_estimado"),
+            to_timestamp("data_publicacao_pncp").alias("publicado_em"),
+            trim(col("modalidade_id_pncp")).alias("modalidade_id"),
+            trim(col("modalidade_nome")).alias("modalidade"),
             to_timestamp("data_atualizacao_pncp").alias("atualizado_em"),
             col("ind_atual").cast("boolean").alias("ind_atual"),
             col("contratacao_excluida").cast("boolean").alias("contratacao_excluida"),
@@ -38,13 +45,21 @@ def transformar_contratacoes(bronze: DataFrame) -> tuple[DataFrame, DataFrame, D
                 col("numero_controle_pncp").isNotNull()
                 & (col("numero_controle_pncp") != ""),
                 concat(lit("pncp|"), lower(col("numero_controle_pncp"))),
-            ).otherwise(concat(lower(col("sistema_origem")), lit("|"), col("id_origem"))),
+            ).otherwise(
+                concat(lower(col("sistema_origem")), lit("|"), col("id_origem"))
+            ),
         )
         .withColumn("contratacao_id", sha2("chave_natural", 256))
         .withColumn(
             "motivo_quarentena",
-            when(col("cnpj_orgao").isNull() | (col("cnpj_orgao") == ""), "cnpj_orgao_ausente")
-            .when(col("id_origem").isNull() | (col("id_origem") == ""), "id_origem_ausente")
+            when(
+                col("cnpj_orgao").isNull() | (col("cnpj_orgao") == ""),
+                "cnpj_orgao_ausente",
+            )
+            .when(
+                col("id_origem").isNull() | (col("id_origem") == ""),
+                "id_origem_ausente",
+            )
             .when(col("atualizado_em").isNull(), "data_atualizacao_invalida")
             .when(col("valor_total_estimado") < 0, "valor_total_negativo"),
         )
@@ -57,13 +72,19 @@ def transformar_contratacoes(bronze: DataFrame) -> tuple[DataFrame, DataFrame, D
         "cnpj_orgao",
         "objeto",
         "valor_total_estimado",
+        "publicado_em",
+        "modalidade_id",
+        "modalidade",
         "atualizado_em",
         "ind_atual",
         "contratacao_excluida",
     ]
     validas = validas.withColumn(
         "hash_conteudo_entidade",
-        sha2(to_json(struct(*campos_conteudo), options={"ignoreNullFields": "false"}), 256),
+        sha2(
+            to_json(struct(*campos_conteudo), options={"ignoreNullFields": "false"}),
+            256,
+        ),
     )
     chaves_conflito = (
         validas.groupBy("contratacao_id", "atualizado_em")
@@ -71,14 +92,20 @@ def transformar_contratacoes(bronze: DataFrame) -> tuple[DataFrame, DataFrame, D
         .where("total_hashes > 1")
         .drop("total_hashes")
     )
-    conflitos = validas.join(chaves_conflito, ["contratacao_id", "atualizado_em"], "inner")
-    elegiveis = validas.join(chaves_conflito, ["contratacao_id", "atualizado_em"], "left_anti")
+    conflitos = validas.join(
+        chaves_conflito, ["contratacao_id", "atualizado_em"], "inner"
+    )
+    elegiveis = validas.join(
+        chaves_conflito, ["contratacao_id", "atualizado_em"], "left_anti"
+    )
     janela = Window.partitionBy("contratacao_id").orderBy(
         col("atualizado_em").desc(),
         col("coletado_em_utc").desc(),
         col("source_file_id").desc(),
     )
-    correntes = elegiveis.withColumn("_ordem", row_number().over(janela)).where("_ordem = 1").drop(
-        "_ordem"
+    correntes = (
+        elegiveis.withColumn("_ordem", row_number().over(janela))
+        .where("_ordem = 1")
+        .drop("_ordem")
     )
     return correntes, quarentena, conflitos
