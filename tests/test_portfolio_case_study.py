@@ -1,15 +1,20 @@
+import subprocess
+import sys
 from pathlib import Path
-from zipfile import ZipFile
 
 
 ROOT = Path(__file__).parents[1]
-DOCUMENT = ROOT / "deliverables/RastroPublico-case-study.docx"
+SCRIPT = ROOT / "scripts/build_portfolio_case_study.py"
 
 
-def test_case_study_historico_mantem_imagens_acessiveis() -> None:
-    assert DOCUMENT.exists()
-    with ZipFile(DOCUMENT) as archive:
-        document_xml = archive.read("word/document.xml").decode("utf-8")
+def test_gerador_recusa_evidencias_ausentes() -> None:
+    resultado = subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
-    for alt_text in ("arquitetura.png", "categorias.png", "benchmark.png"):
-        assert alt_text in document_xml
+    assert resultado.returncode != 0
+    assert "evidencia ausente" in resultado.stderr
