@@ -1,4 +1,5 @@
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -27,6 +28,12 @@ def test_build_benchmark_sql_uses_only_the_requested_strategy(
     assert "run=iteracao-01" in sql
     assert expected_hint in sql
     assert "ORDER BY orgao_id, categoria_tecnologia" in sql
+
+
+def test_benchmark_disables_result_cache_before_measurements() -> None:
+    notebook = Path("notebooks/06_benchmark_inicial.py").read_text(encoding="utf-8")
+
+    assert 'spark.sql("SET use_cached_result = false")' in notebook
 
 
 def test_build_benchmark_sql_rejects_untrusted_labels() -> None:
