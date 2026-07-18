@@ -153,7 +153,26 @@ materializar_snapshot(problemas, tabela_problemas)
 
 # ponytail: reconstrução integral é determinística no volume atual; migrar para
 # MERGE por chaves afetadas somente se o benchmark do Bloco 7 justificar.
+total_entrada = bronze_itens.count() + bronze_resultados.count()
+total_quarentena = itens_quarentena.count() + resultados_quarentena.count()
+total_conflitos = itens_conflitos.count() + resultados_conflitos.count()
+total_publicado = itens.count() + resultados.count()
+total_pendente = itens_sem_contratacao.count() + resultados_sem_item.count()
+duplicatas_fisicas = (
+    total_entrada
+    - total_quarentena
+    - total_conflitos
+    - total_publicado
+    - total_pendente
+)
 metricas = [
+    avaliar_regra(
+        "reconciliacao_entrada",
+        max(0, -duplicatas_fisicas),
+        total_entrada,
+        0,
+        "erro",
+    ),
     avaliar_regra(
         "itens_duplicados",
         itens.groupBy("item_id").count().where("count > 1").count(),
@@ -193,22 +212,29 @@ metricas = [
     ),
     avaliar_regra(
         "vinculos_pendentes",
-        itens_sem_contratacao.count() + resultados_sem_item.count(),
-        bronze_itens.count() + bronze_resultados.count(),
+        total_pendente,
+        total_entrada,
         0,
         "alerta",
     ),
     avaliar_regra(
         "registros_em_quarentena",
-        itens_quarentena.count() + resultados_quarentena.count(),
-        bronze_itens.count() + bronze_resultados.count(),
+        total_quarentena,
+        total_entrada,
         0,
         "alerta",
     ),
     avaliar_regra(
         "conflitos_de_versao",
-        itens_conflitos.count() + resultados_conflitos.count(),
-        bronze_itens.count() + bronze_resultados.count(),
+        total_conflitos,
+        total_entrada,
+        0,
+        "alerta",
+    ),
+    avaliar_regra(
+        "duplicatas_fisicas_descartadas",
+        duplicatas_fisicas,
+        total_entrada,
         0,
         "alerta",
     ),
