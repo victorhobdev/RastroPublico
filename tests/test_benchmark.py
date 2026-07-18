@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 
 from rastro_publico.benchmark import (
@@ -48,6 +50,19 @@ def test_canonical_result_accepts_the_single_summary_row() -> None:
     row = ["534", "15207", "1021", "123.45", "99.90", "abc123"]
 
     assert canonical_benchmark_result([row]) == tuple(row)
+
+
+def test_canonical_result_serializes_spark_decimal_values() -> None:
+    row = [527, 15207, 1021, Decimal("123.45"), Decimal("99.90"), "abc123"]
+
+    assert canonical_benchmark_result([row]) == (
+        "527",
+        "15207",
+        "1021",
+        "123.45",
+        "99.90",
+        "abc123",
+    )
 
 
 @pytest.mark.parametrize("rows", [[], [["incompleta"]], [["a"] * 6, ["b"] * 6]])

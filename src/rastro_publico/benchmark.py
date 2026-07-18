@@ -79,7 +79,7 @@ def build_explain_sql(strategy: str, run_label: str) -> str:
     return f"EXPLAIN FORMATTED\n{build_benchmark_sql(strategy, run_label)}"
 
 
-def canonical_benchmark_result(rows: list[list[str | None]]) -> tuple[str | None, ...]:
+def canonical_benchmark_result(rows: list[list[object]]) -> tuple[str | None, ...]:
     if len(rows) != 1 or len(rows[0]) != 6:
         raise ValueError("resultado do benchmark deve conter uma linha e seis colunas")
-    return tuple(rows[0])
+    return tuple(None if value is None else str(value) for value in rows[0])
