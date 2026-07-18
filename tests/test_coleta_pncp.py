@@ -108,6 +108,32 @@ def test_lote_escreve_payload_e_manifesto_reconciliaveis(tmp_path) -> None:
     assert documento["respostas"][0]["pagina"] == 1
 
 
+def test_lote_nao_colide_mesma_pagina_de_datas_ou_modalidades_distintas(
+    tmp_path,
+) -> None:
+    resultados = [
+        coletar_pagina(
+            data=data,
+            modalidade=modalidade,
+            pagina=1,
+            abrir=lambda *_args, **_kwargs: Resposta(
+                f'{{"data":"{data}","modalidade":{modalidade}}}'.encode()
+            ),
+            dormir=lambda _: None,
+        )
+        for data, modalidade in (("20260715", 6), ("20260716", 6), ("20260716", 8))
+    ]
+
+    manifesto = escrever_lote(tmp_path, "run-multiplo", resultados)
+    arquivos = [
+        item["arquivo"]
+        for item in json.loads(manifesto.read_text(encoding="utf-8"))["respostas"]
+    ]
+
+    assert len(arquivos) == len(set(arquivos)) == 3
+    assert len(list(tmp_path.glob("*.json"))) == 4
+
+
 def test_falha_final_expoe_tentativas() -> None:
     def abrir(request, timeout):
         raise HTTPError(request.full_url, 500, "server error", {}, None)
