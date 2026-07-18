@@ -4,7 +4,11 @@ import sys
 import pytest
 from pyspark.sql import SparkSession
 
-from rastro_publico.coleta.arquivo_bronze import arquivo_ja_carregado, preparar_csv_bronze
+from rastro_publico.coleta.arquivo_bronze import (
+    arquivo_ja_carregado,
+    preparar_csv_bronze,
+    tabela_bronze,
+)
 from rastro_publico.coleta.persistencia import filtrar_novas_linhas
 
 
@@ -65,3 +69,11 @@ def test_detecta_arquivo_ja_carregado(spark, monkeypatch) -> None:
 
     assert arquivo_ja_carregado(spark, "bronze.contratacoes_raw", "hash-1")
     assert not arquivo_ja_carregado(spark, "bronze.contratacoes_raw", "hash-2")
+
+
+def test_mapeia_somente_datasets_bronze_aprovados() -> None:
+    assert tabela_bronze("VW_FT_PNCP_COMPRA_ITEM") == "workspace.bronze.itens_raw"
+    assert tabela_bronze("VW_DM_PNCP_ITEM_RESULTADO") == "workspace.bronze.resultados_raw"
+
+    with pytest.raises(ValueError, match="dataset nao suportado"):
+        tabela_bronze("tabela_injetada")
