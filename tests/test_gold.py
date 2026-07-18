@@ -266,9 +266,12 @@ def test_recorrencia_presenca_e_rede_reconciliam_relacoes(spark) -> None:
         ["unidade_id", "uf", "municipio"],
     )
 
-    recorrencia = calcular_recorrencia_orgao_fornecedor(
+    recorrencias = calcular_recorrencia_orgao_fornecedor(
         itens, resultados, contratacoes, vinculos
-    ).where("orgao_id = 'o1' AND fornecedor_id = 'f1'").first()
+    )
+    recorrencia = recorrencias.where(
+        "orgao_id = 'o1' AND fornecedor_id = 'f1'"
+    ).first()
     presenca = calcular_presenca_fornecedores(
         itens, resultados, contratacoes, vinculos, unidades
     ).where("fornecedor_id = 'f1'").first()
@@ -279,6 +282,8 @@ def test_recorrencia_presenca_e_rede_reconciliam_relacoes(spark) -> None:
     assert recorrencia.contratacoes_distintas == 2
     assert recorrencia.periodos_distintos == 2
     assert recorrencia.dias_entre_primeira_ultima == 31
+    assert recorrencias.count() == 1
+    assert recorrencias.where("fornecedor_id = 'f2'").count() == 0
     assert presenca.orgaos_distintos == 1
     assert presenca.periodos_distintos == 2
     assert presenca.valor_total_homologado == pytest.approx(250.0)
@@ -324,7 +329,8 @@ def test_preco_por_categoria_e_unidade_e_medido_mas_nao_publicado(spark) -> None
     assert grupo.observacoes == 3
     assert grupo.mediana == pytest.approx(100.0)
     assert grupo.status_publicacao == "nao_publicavel"
-    assert grupo.limitacao == "produto_nao_homogeneo_em_categoria_unidade"
+    assert grupo.comparabilidade_avaliada is False
+    assert grupo.limitacao == "comparabilidade_desabilitada_sem_especificacao_produto"
 
 
 def test_evolucao_contratual_resume_eventos_e_extensao(spark) -> None:

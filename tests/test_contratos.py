@@ -5,10 +5,40 @@ import pytest
 from pyspark.sql import SparkSession
 
 from rastro_publico.transformacoes.contratos import (
+    filtrar_populacao_contratual_tecnologia,
     transformar_contratos,
     transformar_eventos_contrato,
     transformar_itens_contrato,
 )
+
+
+def test_populacao_contratual_restringe_contratos_eventos_e_fornecedores(spark) -> None:
+    contratos = spark.createDataFrame(
+        [("ct-tech", "f-tech"), ("ct-geral", "f-geral")],
+        ["contrato_id", "fornecedor_id"],
+    )
+    itens = spark.createDataFrame(
+        [("ct-tech", "monitor"), ("ct-geral", "incerto")],
+        ["contrato_id", "categoria_tecnologia"],
+    )
+    eventos = spark.createDataFrame(
+        [("e-tech", "ct-tech"), ("e-geral", "ct-geral")],
+        ["evento_contrato_id", "contrato_id"],
+    )
+    fornecedores = spark.createDataFrame(
+        [("f-tech",), ("f-geral",)],
+        ["fornecedor_id"],
+    )
+
+    contratos_tech, eventos_tech, fornecedores_tech = (
+        filtrar_populacao_contratual_tecnologia(
+            contratos, itens, eventos, fornecedores
+        )
+    )
+
+    assert [row.contrato_id for row in contratos_tech.collect()] == ["ct-tech"]
+    assert [row.evento_contrato_id for row in eventos_tech.collect()] == ["e-tech"]
+    assert [row.fornecedor_id for row in fornecedores_tech.collect()] == ["f-tech"]
 
 
 @pytest.fixture(scope="module")
