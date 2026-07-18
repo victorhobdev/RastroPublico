@@ -220,6 +220,47 @@ def test_item_contratual_tipado_e_classificado(spark) -> None:
     assert conflitos.count() == 0
 
 
+def test_item_contratual_sem_quantidade_continua_elegivel_para_classificacao(
+    spark,
+) -> None:
+    bronze = spark.createDataFrame(
+        [
+            (
+                "21",
+                "10",
+                "Serviço",
+                "Licenciamento de software corporativo",
+                "",
+                "",
+                "",
+                "2",
+                "2026-01-01",
+                "2026-07-18",
+                "a2",
+            )
+        ],
+        [
+            "id",
+            "contrato_id",
+            "tipo_id",
+            "descricao_complementar",
+            "quantidade",
+            "valorunitario",
+            "valortotal",
+            "numero_item_compra",
+            "data_inicio_item",
+            "_coletado_em_utc",
+            "_source_file_id",
+        ],
+    )
+
+    itens, quarentena, _ = transformar_itens_contrato(bronze)
+
+    assert itens.first().categoria_tecnologia == "servico_licenciamento"
+    assert itens.first().elegivel_preco is False
+    assert quarentena.count() == 0
+
+
 def test_evento_preserva_versao_mais_recente_e_variacao(spark) -> None:
     colunas = [
         "id",
