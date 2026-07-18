@@ -17,6 +17,7 @@ def baixar_arquivo(
     run_id: str,
     abrir: Callable = urlopen,
     tamanho_bloco: int = 1024 * 1024,
+    minimo_bytes: int = 1,
     timeout: int = 120,
 ) -> Path:
     destino.parent.mkdir(parents=True, exist_ok=True)
@@ -33,6 +34,8 @@ def baixar_arquivo(
                 tamanho_bytes += len(bloco)
             status_http = resposta.status
             data_publicacao = resposta.headers.get("Last-Modified")
+        if tamanho_bytes < minimo_bytes:
+            raise ValueError(f"arquivo menor que {minimo_bytes} bytes")
         temporario.replace(destino)
     except Exception:
         temporario.unlink(missing_ok=True)
