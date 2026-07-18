@@ -3,6 +3,7 @@ import sys
 
 import pytest
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import lit
 
 from rastro_publico.transformacoes.nucleo import (
     classificar_equipamentos,
@@ -100,7 +101,7 @@ def test_item_tem_grao_logico_e_quarentena_quantidade(spark) -> None:
     assert conflitos.count() == 0
 
 
-def test_item_mais_novo_substitui_versao_antiga_e_preserva_situacao(spark) -> None:
+def test_item_mais_novo_substitui_versao_antiga(spark) -> None:
     colunas = [
         "id_compra_item",
         "numero_controle_PNCP_compra",
@@ -155,8 +156,34 @@ def test_item_mais_novo_substitui_versao_antiga_e_preserva_situacao(spark) -> No
     item = transformar_itens(bronze)[0].first()
 
     assert item.quantidade == 2
-    assert item.situacao_item == "Cancelado"
-    assert item.cancelado is True
+
+
+def test_situacao_fisica_divergente_nao_cria_conflito_de_item(spark) -> None:
+    bronze = spark.createDataFrame(
+        [
+            ("i1", "controle-1", "1", "Notebook", "M", "1", "UN", "100", "100", "Homologado", "2026-07-15", "a1"),
+            ("i1", "controle-1", "1", "Notebook", "M", "1", "UN", "100", "100", "Em andamento", "2026-07-15", "a1"),
+        ],
+        [
+            "id_compra_item",
+            "numero_controle_PNCP_compra",
+            "numero_item_pncp",
+            "descricao_resumida",
+            "material_ou_servico",
+            "quantidade",
+            "unidade_medida",
+            "valor_unitario_estimado",
+            "valor_total",
+            "situacao_compra_item_nome",
+            "data_atualizacao_pncp",
+            "_source_file_id",
+        ],
+    ).withColumn("descricao_detalhada", lit(""))
+
+    itens, _, conflitos = transformar_itens(bronze)
+
+    assert itens.count() == 1
+    assert conflitos.count() == 0
 
 
 def test_resultado_remove_cpf_e_mantem_vinculo(spark) -> None:
