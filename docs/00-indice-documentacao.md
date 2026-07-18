@@ -1,8 +1,8 @@
 # RastroPúblico — índice da documentação
 
-Este índice é a entrada técnica do repositório enquanto a criação de um README
-não estiver autorizada. Ele separa contratos atuais de registros históricos para
-que números invalidados não sejam confundidos com o produto corrigido.
+Este índice complementa o README e separa contratos atuais de registros
+históricos para que números invalidados não sejam confundidos com o produto
+corrigido.
 
 ## Leia primeiro
 
