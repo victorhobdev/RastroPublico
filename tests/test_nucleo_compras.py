@@ -236,9 +236,40 @@ def test_vinculo_preserva_contratacao_orgao_e_unidade(spark) -> None:
     ],
 )
 def test_classificacao_inicial_equipamentos(spark, descricao, categoria) -> None:
-    itens = spark.createDataFrame([("item-1", descricao)], ["item_id", "descricao"])
+    itens = spark.createDataFrame(
+        [("item-1", descricao, "M")],
+        ["item_id", "descricao", "material_ou_servico"],
+    )
 
     classificado = classificar_equipamentos(itens).first()
 
     assert classificado.categoria_tecnologia == categoria
-    assert classificado.versao_regra == "equipamentos_v1"
+    assert classificado.versao_regra == "equipamentos_v2"
+
+
+@pytest.mark.parametrize(
+    "descricao",
+    [
+        "Cessão de direitos sobre programas de computador",
+        "Cartucho tinta impressora HP",
+        "Administração de estágio universitário monitor",
+        "Transporte para servidor público",
+        "Microfone direcional tipo switch",
+    ],
+)
+def test_classificacao_rejeita_contextos_falso_positivos(spark, descricao) -> None:
+    itens = spark.createDataFrame(
+        [("item-1", descricao, "M")],
+        ["item_id", "descricao", "material_ou_servico"],
+    )
+
+    assert classificar_equipamentos(itens).first().categoria_tecnologia == "incerto"
+
+
+def test_classificacao_rejeita_servico_mesmo_com_nome_de_equipamento(spark) -> None:
+    itens = spark.createDataFrame(
+        [("item-1", "Servidor rack", "S")],
+        ["item_id", "descricao", "material_ou_servico"],
+    )
+
+    assert classificar_equipamentos(itens).first().categoria_tecnologia == "incerto"
