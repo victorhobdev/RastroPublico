@@ -6,7 +6,9 @@ from time import perf_counter
 
 
 dbutils.widgets.text("source_root", "/Workspace/Users/victorhob@ufrrj.br/rastro_publico/src")
-dbutils.widgets.dropdown("strategy", "natural", ["natural", "broadcast", "merge"])
+dbutils.widgets.dropdown(
+    "strategy", "all", ["all", "natural", "broadcast", "merge"]
+)
 dbutils.widgets.text("run_label", "iteracao-01")
 dbutils.widgets.text("repeticoes", "4")
 
@@ -24,26 +26,49 @@ from rastro_publico.benchmark import (  # noqa: E402
 strategy = dbutils.widgets.get("strategy")
 run_label = dbutils.widgets.get("run_label")
 repeticoes = int(dbutils.widgets.get("repeticoes"))
-if repeticoes < 2:
-    raise ValueError("repeticoes deve incluir aquecimento e ao menos uma medida")
+if repeticoes != 4:
+    raise ValueError("benchmark inicial exige um aquecimento e tres medidas")
 
-initial_plan = spark.sql(build_explain_sql(strategy, f"plano-{run_label}"))
-print("PLANO_INICIAL")
-print("\n".join(row[0] for row in initial_plan.collect()))
+strategies = ["natural", "broadcast", "merge"] if strategy == "all" else [strategy]
+for current_strategy in strategies:
+    initial_plan = spark.sql(
+        build_explain_sql(current_strategy, f"plano-{run_label}-{current_strategy}")
+    )
+    print(f"PLANO_INICIAL strategy={current_strategy}")
+    print("\n".join(row[0] for row in initial_plan.collect()))
+
+sequence = [(current_strategy, 0, True) for current_strategy in strategies]
+if strategy == "all":
+    sequence += [
+        ("natural", 1, False),
+        ("broadcast", 1, False),
+        ("merge", 1, False),
+        ("broadcast", 2, False),
+        ("merge", 2, False),
+        ("natural", 2, False),
+        ("merge", 3, False),
+        ("natural", 3, False),
+        ("broadcast", 3, False),
+    ]
+else:
+    sequence += [(strategy, iteration, False) for iteration in range(1, 4)]
 
 executions = []
-for iteration in range(1, repeticoes + 1):
-    iteration_label = f"{run_label}-{iteration:02d}"
+for current_strategy, iteration, warmup in sequence:
+    iteration_label = f"{run_label}-{current_strategy}-{iteration:02d}"
     started = perf_counter()
     result_rows = [
         list(row)
-        for row in spark.sql(build_benchmark_sql(strategy, iteration_label)).collect()
+        for row in spark.sql(
+            build_benchmark_sql(current_strategy, iteration_label)
+        ).collect()
     ]
     elapsed_ms = round(1000 * (perf_counter() - started), 3)
     executions.append(
         {
+            "strategy": current_strategy,
             "iteration": iteration,
-            "warmup": iteration == 1,
+            "warmup": warmup,
             "elapsed_ms": elapsed_ms,
             "result": canonical_benchmark_result(result_rows),
         }
