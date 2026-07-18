@@ -342,7 +342,9 @@ def classificar_servicos(itens: DataFrame) -> DataFrame:
             & texto.rlike(
                 r"^(software como servico\s*-?\s*saas|servicos? de computacao "
                 r"em nuvem|computacao em nuvem|infraestrutura como servico|"
-                r"plataforma como servico|servicos? em nuvem)\b"
+                r"plataforma como servico|servicos? em nuvem|servicos? "
+                r"especializados de disponibilizacao de copias de seguranca "
+                r"de dados)\b"
             ),
             "cloud",
         )
@@ -390,7 +392,8 @@ def classificar_servicos(itens: DataFrame) -> DataFrame:
                 r"infraestrutura de tecnologia da ?informacao|servicos? de "
                 r"hospedagem de sistemas|servicos? de data ?center|servico de "
                 r"infraestrutura de redes? de comunicacao de dados|instalacao de "
-                r"cabeamento estruturado)\b"
+                r"cabeamento estruturado|servico de instalacao.{0,80}manutencao "
+                r"de rede local de computadores)\b"
             ),
             "infraestrutura",
         )

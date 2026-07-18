@@ -445,12 +445,20 @@ def test_classificacao_rejeita_servico_mesmo_com_nome_de_equipamento(spark) -> N
     ("descricao", "categoria"),
     [
         ("Software como Serviço - SaaS", "cloud"),
+        (
+            "Serviços especializados de disponibilização de cópias de segurança de dados",
+            "cloud",
+        ),
         ("Licenciamento de direitos permanentes de uso de software", "licenciamento"),
         ("Desenvolvimento de novo software - outras linguagens", "desenvolvimento"),
         ("Outsourcing de impressão - páginas A4", "outsourcing"),
         ("Serviços de suporte técnico de tecnologia da informação", "suporte"),
         (
             "Outros serviços para a infraestrutura de tecnologia da informação e comunicação",
+            "infraestrutura",
+        ),
+        (
+            "Serviço de instalação e manutenção de rede local de computadores",
             "infraestrutura",
         ),
     ],
