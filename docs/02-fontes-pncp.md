@@ -22,7 +22,7 @@ Consulta realizada em 17/07/2026. A versão e o conteúdo devem ser verificados 
 
 | Fonte | Papel aprovado | Uso inicial | Limite |
 | --- | --- | --- | --- |
-| PNCP API de Consulta | canal canônico nacional planejado | monitoramento e reconciliação quando disponível | consulta de contratações indisponível no Bloco 2 |
+| PNCP API de Consulta | canal canônico nacional planejado | monitoramento e reconciliação | consulta de contratações indisponível no Bloco 2; detalhe de item voltou a responder `200` no Bloco 4 |
 | Compras.gov CSV | fonte transacional ativa | contratações, itens e resultados; bootstrap e incremental | cobertura deve ser medida, não presumida equivalente ao PNCP inteiro |
 | Comprasnet Contratos CSV | fonte contratual ativa | contratos, itens e históricos | vínculo com a contratação não é explícito em todas as linhas |
 | CNPJ/QSA | enriquecimento cadastral | identidade, razão social e quadro societário com data de referência | não substitui o fornecedor publicado na contratação |
