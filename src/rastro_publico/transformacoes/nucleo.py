@@ -244,6 +244,38 @@ def transformar_dimensoes(bronze: DataFrame) -> tuple[DataFrame, DataFrame]:
     return orgaos, unidades
 
 
+def transformar_vinculos_contratacao(bronze: DataFrame) -> DataFrame:
+    vinculos = (
+        bronze.select(
+            trim("numero_controle_PNCP").alias("numero_controle_pncp"),
+            trim("orgao_entidade_cnpj").alias("cnpj_orgao"),
+            trim("unidade_orgao_codigo_unidade").alias("codigo_unidade"),
+            to_timestamp("data_atualizacao_pncp").alias("atualizado_em"),
+            col("_source_file_id").alias("source_file_id"),
+        )
+        .where(
+            col("numero_controle_pncp").isNotNull()
+            & (col("numero_controle_pncp") != "")
+            & col("cnpj_orgao").isNotNull()
+            & (col("cnpj_orgao") != "")
+            & col("codigo_unidade").isNotNull()
+            & (col("codigo_unidade") != "")
+        )
+        .select(
+            sha2(concat(lit("pncp|"), lower("numero_controle_pncp")), 256).alias(
+                "contratacao_id"
+            ),
+            sha2(concat(lit("orgao|"), "cnpj_orgao"), 256).alias("orgao_id"),
+            sha2(concat_ws("|", "cnpj_orgao", "codigo_unidade"), 256).alias(
+                "unidade_id"
+            ),
+            "atualizado_em",
+            "source_file_id",
+        )
+    )
+    return _mais_recente(vinculos, "contratacao_id")
+
+
 def classificar_equipamentos(itens: DataFrame) -> DataFrame:
     texto = lower(col("descricao"))
     categoria = (
