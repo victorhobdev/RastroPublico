@@ -3,6 +3,7 @@ import sys
 
 import pytest
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
 
 from rastro_publico.transformacoes.gold import (
     calcular_evolucao_contratual,
@@ -136,7 +137,7 @@ def test_concentracao_reconcilia_top1_top3_hhi_e_estado(spark) -> None:
     assert gold.fornecedores_distintos == 2
     assert gold.resultados_elegiveis == 3
     assert gold.top_1 == pytest.approx(0.9)
-    assert gold.top_3 == pytest.approx(1.0)
+    assert float(gold.top_3) == pytest.approx(1.0)
     assert gold.hhi == pytest.approx(0.82)
     assert gold.status_publicacao == "publicada"
 
@@ -155,6 +156,48 @@ def test_concentracao_nao_publica_grupo_sem_populacao_minima(spark) -> None:
 
     assert gold.status_publicacao == "nao_publicavel"
     assert gold.limitacao == "fornecedores_insuficientes"
+
+
+def test_concentracao_limita_top3_apos_arredondamento_decimal(spark) -> None:
+    itens = spark.createDataFrame(
+        [
+            ("c1", "i1", "computador_notebook"),
+            ("c1", "i2", "computador_notebook"),
+            ("c1", "i3", "computador_notebook"),
+        ],
+        ["contratacao_id", "item_id", "categoria_tecnologia"],
+    )
+    resultados = spark.createDataFrame(
+        [
+            ("r1", "i1", "f1", 1.0, False),
+            ("r2", "i2", "f2", 1.0, False),
+            ("r3", "i3", "f3", 4.0, False),
+        ],
+        [
+            "resultado_id",
+            "item_id",
+            "fornecedor_id",
+            "valor_total_homologado",
+            "cancelado",
+        ],
+    ).withColumn(
+        "valor_total_homologado",
+        col("valor_total_homologado").cast("decimal(38,2)"),
+    )
+    contratacoes = spark.createDataFrame(
+        [("c1", "2026-07-01", "6", "Pregao")],
+        ["contratacao_id", "publicado_em", "modalidade_id", "modalidade"],
+    )
+    vinculos = spark.createDataFrame(
+        [("c1", "o1")], ["contratacao_id", "orgao_id"]
+    )
+
+    gold = calcular_concentracao_fornecedores(
+        itens, resultados, contratacoes, vinculos
+    ).first()
+
+    assert gold.top_3 == pytest.approx(1.0)
+    assert gold.top_3 <= 1
 
 
 def test_cobertura_servicos_mantem_preco_nao_publicavel(spark) -> None:

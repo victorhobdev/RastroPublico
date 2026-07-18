@@ -97,7 +97,7 @@ equivalencia_sql = (
              COUNT(*) AS fornecedores_distintos,
              SUM(resultados_fornecedor) AS resultados_elegiveis,
              MAX(parcela) AS top_1,
-             SUM(CASE WHEN posicao <= 3 THEN parcela ELSE 0 END) AS top_3,
+             LEAST(1.0, SUM(CASE WHEN posicao <= 3 THEN parcela ELSE 0 END)) AS top_3,
              SUM(parcela * parcela) AS hhi
       FROM participacao
       GROUP BY ALL

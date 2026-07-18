@@ -8,6 +8,7 @@ from pyspark.sql.functions import (
     date_format,
     first,
     greatest,
+    least,
     lit,
     max as spark_max,
     min as spark_min,
@@ -241,9 +242,12 @@ def calcular_concentracao_fornecedores(
         count("fornecedor_id").alias("fornecedores_distintos"),
         spark_sum("resultados_fornecedor").alias("resultados_elegiveis"),
         spark_max("participacao").alias("top_1"),
-        spark_sum(when(col("posicao") <= 3, col("participacao")).otherwise(0)).alias(
-            "top_3"
-        ),
+        least(
+            lit(1.0),
+            spark_sum(
+                when(col("posicao") <= 3, col("participacao")).otherwise(0)
+            ),
+        ).alias("top_3"),
         spark_sum(col("participacao") * col("participacao")).alias("hhi"),
     )
     return (
