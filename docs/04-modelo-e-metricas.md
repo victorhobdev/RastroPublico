@@ -212,6 +212,17 @@ Fórmulas:
 
 O HHI será publicado na escala `0–1`, acompanhado do número de fornecedores e cobertura. Nenhum limiar jurídico ou concorrencial será assumido sem contexto aplicável.
 
+#### Contrato físico confirmado no Bloco 6A
+
+- população elegível: resultado Silver não cancelado, com valor homologado positivo, fornecedor, órgão, período de publicação, modalidade e categoria tecnológica diferente de `incerto`;
+- grão temporal inicial: mês de publicação da contratação;
+- valor: somente `valor_total_homologado` do resultado; valores estimados e contratuais não entram no denominador;
+- publicação inicial: ao menos três resultados, dois fornecedores e cobertura de valor de 80%; abaixo disso o grupo permanece calculado, mas recebe `nao_publicavel` e uma limitação explícita;
+- validações: `0 <= top_1 <= top_3 <= 1`, `0 <= hhi <= 1`, cobertura entre 0 e 1, reconciliação do valor e equivalência entre PySpark e Spark SQL;
+- revisão: os mínimos são um gate analítico inicial, não um limiar jurídico, e serão reavaliados com a população de 12 meses no Bloco 11.
+
+No recorte de um dia do Bloco 6A, os dois grupos observados possuíam somente um resultado e foram corretamente marcados como `nao_publicavel`. A tabela de cobertura continuou publicada para tornar essa insuficiência visível.
+
 ### 8.3 Recorrência órgão–fornecedor
 
 - **Pergunta:** com que frequência a mesma relação aparece?

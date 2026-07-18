@@ -183,6 +183,8 @@ Metadados mínimos:
 
 Schemas e colunas são previsões. O Bloco 0 confirmou campos e chaves candidatas, mas eles só se tornam contratos físicos no bloco da respectiva entidade, com fixtures reais e testes.
 
+O Bloco 6A confirmou os dois primeiros contratos físicos. `gold.qualidade_cobertura` combina cobertura analítica por mês, modalidade e categoria com o resultado operacional mais recente de cada regra de `ops.quality_results`. `gold.concentracao_fornecedores` usa mês de publicação, órgão, categoria e modalidade; preserva grupos insuficientes com `status_publicacao = 'nao_publicavel'` em vez de ocultá-los. A Silver de contratações passou a preservar `publicado_em`, `modalidade_id` e `modalidade` como campos de negócio incluídos no hash canônico.
+
 ## 6. Estratégia incremental
 
 ### 6.1 Bootstrap
