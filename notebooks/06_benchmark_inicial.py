@@ -31,7 +31,6 @@ initial_plan = spark.sql(build_explain_sql(strategy, f"plano-{run_label}"))
 print("PLANO_INICIAL")
 print("\n".join(row[0] for row in initial_plan.collect()))
 
-spark.sql("SET use_cached_result = false").collect()
 executions = []
 for iteration in range(1, repeticoes + 1):
     iteration_label = f"{run_label}-{iteration:02d}"
