@@ -366,6 +366,7 @@ def calcular_recorrencia_orgao_fornecedor(
                 .cast("decimal(38,2)")
             ).alias("valor_total_homologado"),
         )
+        .where(col("contratacoes_distintas") >= 2)
         .withColumn(
             "dias_entre_primeira_ultima",
             datediff("ultima_ocorrencia", "primeira_ocorrencia"),
@@ -475,9 +476,11 @@ def calcular_variacao_precos(
             spark_min("valor_unitario_homologado").alias("minimo"),
             spark_max("valor_unitario_homologado").alias("maximo"),
         )
+        .withColumn("comparabilidade_avaliada", lit(False))
         .withColumn("status_publicacao", lit("nao_publicavel"))
         .withColumn(
-            "limitacao", lit("produto_nao_homogeneo_em_categoria_unidade")
+            "limitacao",
+            lit("comparabilidade_desabilitada_sem_especificacao_produto"),
         )
     )
 

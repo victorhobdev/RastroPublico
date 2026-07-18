@@ -33,6 +33,9 @@ from rastro_publico.transformacoes.contexto import (
     transformar_empresas_cnpj,
     transformar_sancoes,
 )
+from rastro_publico.transformacoes.contratos import (
+    filtrar_populacao_contratual_tecnologia,
+)
 from rastro_publico.transformacoes.gold import (
     calcular_evolucao_contratual,
     calcular_presenca_fornecedores,
@@ -148,12 +151,22 @@ contratacoes = spark.table("workspace.silver.contratacoes")
 vinculos = spark.table("workspace.silver.contratacoes_dimensoes")
 unidades = spark.table("workspace.silver.unidades_compradoras")
 contratos = spark.table("workspace.silver.contratos")
+itens_contrato = spark.table("workspace.silver.itens_contrato")
 eventos = spark.table("workspace.silver.eventos_contrato")
+fornecedores_contratos = spark.table("workspace.silver.fornecedores_contratos")
+contratos_tecnologia, eventos_tecnologia, fornecedores_contratos_tecnologia = (
+    filtrar_populacao_contratual_tecnologia(
+        contratos,
+        itens_contrato,
+        eventos,
+        fornecedores_contratos,
+    )
+)
 fornecedores = (
     spark.table("workspace.silver.fornecedores")
     .select("fornecedor_id", "identificador_publico", "nome_fornecedor")
     .unionByName(
-        spark.table("workspace.silver.fornecedores_contratos").select(
+        fornecedores_contratos_tecnologia.select(
             "fornecedor_id", "identificador_publico", "nome_fornecedor"
         )
     )
@@ -168,7 +181,9 @@ gold = {
         itens, resultados, contratacoes, vinculos, unidades
     ),
     "variacao_precos": calcular_variacao_precos(itens, resultados, contratacoes),
-    "evolucao_contratual": calcular_evolucao_contratual(contratos, eventos),
+    "evolucao_contratual": calcular_evolucao_contratual(
+        contratos_tecnologia, eventos_tecnologia
+    ),
     "rede_orgao_fornecedor": calcular_rede_orgao_fornecedor(
         itens, resultados, contratacoes, vinculos
     ),

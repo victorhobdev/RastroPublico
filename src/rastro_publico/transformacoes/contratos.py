@@ -26,6 +26,34 @@ from rastro_publico.transformacoes.nucleo import (
 )
 
 
+def filtrar_populacao_contratual_tecnologia(
+    contratos: DataFrame,
+    itens: DataFrame,
+    eventos: DataFrame,
+    fornecedores: DataFrame,
+) -> tuple[DataFrame, DataFrame, DataFrame]:
+    contratos_tecnologia = (
+        itens.where(
+            col("categoria_tecnologia").isNotNull()
+            & (col("categoria_tecnologia") != "incerto")
+        )
+        .select("contrato_id")
+        .distinct()
+    )
+    contratos_filtrados = contratos.join(
+        contratos_tecnologia, "contrato_id", "left_semi"
+    )
+    eventos_filtrados = eventos.join(
+        contratos_tecnologia, "contrato_id", "left_semi"
+    )
+    fornecedores_filtrados = fornecedores.join(
+        contratos_filtrados.select("fornecedor_id").distinct(),
+        "fornecedor_id",
+        "left_semi",
+    )
+    return contratos_filtrados, eventos_filtrados, fornecedores_filtrados
+
+
 def transformar_contratos(
     bronze: DataFrame, segredo: str
 ) -> tuple[DataFrame, DataFrame, DataFrame, DataFrame]:
