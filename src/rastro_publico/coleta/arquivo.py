@@ -61,3 +61,47 @@ def baixar_arquivo(
     )
     manifesto_temporario.replace(manifesto)
     return manifesto
+
+
+def manifestar_arquivo_existente(
+    *,
+    arquivo: Path,
+    url: str,
+    sistema_origem: str,
+    dataset_origem: str,
+    run_id: str,
+    data_publicacao_arquivo: str | None = None,
+) -> Path:
+    digest = sha256()
+    tamanho_bytes = 0
+    with arquivo.open("rb") as stream:
+        while bloco := stream.read(1024 * 1024):
+            digest.update(bloco)
+            tamanho_bytes += len(bloco)
+    if not tamanho_bytes:
+        raise ValueError("arquivo vazio")
+
+    manifesto = arquivo.with_suffix(f"{arquivo.suffix}.manifest.json")
+    temporario = manifesto.with_suffix(f"{manifesto.suffix}.part")
+    temporario.write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "sistema_origem": sistema_origem,
+                "canal_entrega": "repositorio_csv",
+                "dataset_origem": dataset_origem,
+                "url_origem": url,
+                "arquivo": arquivo.name,
+                "coletado_em_utc": datetime.now(UTC).isoformat(),
+                "data_publicacao_arquivo": data_publicacao_arquivo,
+                "status_http": None,
+                "tamanho_bytes": tamanho_bytes,
+                "hash_arquivo": digest.hexdigest(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    temporario.replace(manifesto)
+    return manifesto
