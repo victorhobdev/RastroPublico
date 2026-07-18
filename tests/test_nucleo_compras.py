@@ -154,8 +154,32 @@ def test_resultado_remove_cpf_e_mantem_vinculo(spark) -> None:
 def test_dimensoes_selecionam_versao_mais_recente(spark) -> None:
     bronze = spark.createDataFrame(
         [
-            ("123", "Órgão antigo", "F", "E", "10", "Unidade antiga", "RJ", "Rio", "3304557", "2026-07-14", "a1"),
-            ("123", "Órgão atual", "F", "E", "10", "Unidade atual", "RJ", "Rio", "3304557", "2026-07-15", "a2"),
+            (
+                "123",
+                "Órgão antigo",
+                "F",
+                "E",
+                "10",
+                "Unidade antiga",
+                "RJ",
+                "Rio",
+                "3304557",
+                "2026-07-14",
+                "a1",
+            ),
+            (
+                "123",
+                "Órgão atual",
+                "F",
+                "E",
+                "10",
+                "Unidade atual",
+                "RJ",
+                "Rio",
+                "3304557",
+                "2026-07-15",
+                "a2",
+            ),
         ],
         [
             "orgao_entidade_cnpj",

@@ -196,6 +196,54 @@ def transformar_resultados(
     return resultados, fornecedores, quarentena, conflitos
 
 
+def transformar_dimensoes(bronze: DataFrame) -> tuple[DataFrame, DataFrame]:
+    base = bronze.select(
+        trim("orgao_entidade_cnpj").alias("cnpj_orgao"),
+        trim("orgao_entidade_razao_social").alias("nome_orgao"),
+        trim("orgao_entidade_esfera_id").alias("esfera"),
+        trim("orgao_entidade_poder_id").alias("poder"),
+        trim("unidade_orgao_codigo_unidade").alias("codigo_unidade"),
+        trim("unidade_orgao_nome_unidade").alias("nome_unidade"),
+        trim("unidade_orgao_uf_sigla").alias("uf"),
+        trim("unidade_orgao_municipio_nome").alias("municipio"),
+        trim("unidade_orgao_codigo_ibge").alias("codigo_ibge"),
+        to_timestamp("data_atualizacao_pncp").alias("atualizado_em"),
+        col("_source_file_id").alias("source_file_id"),
+    ).where(col("cnpj_orgao").isNotNull() & (col("cnpj_orgao") != ""))
+
+    orgaos = _mais_recente(
+        base.select(
+            sha2(concat(lit("orgao|"), "cnpj_orgao"), 256).alias("orgao_id"),
+            "cnpj_orgao",
+            "nome_orgao",
+            "esfera",
+            "poder",
+            "atualizado_em",
+            "source_file_id",
+        ),
+        "orgao_id",
+    )
+    unidades = _mais_recente(
+        base.where(
+            col("codigo_unidade").isNotNull() & (col("codigo_unidade") != "")
+        ).select(
+            sha2(concat(lit("orgao|"), "cnpj_orgao"), 256).alias("orgao_id"),
+            sha2(concat_ws("|", "cnpj_orgao", "codigo_unidade"), 256).alias(
+                "unidade_id"
+            ),
+            "codigo_unidade",
+            "nome_unidade",
+            "uf",
+            "municipio",
+            "codigo_ibge",
+            "atualizado_em",
+            "source_file_id",
+        ),
+        "unidade_id",
+    )
+    return orgaos, unidades
+
+
 def classificar_equipamentos(itens: DataFrame) -> DataFrame:
     texto = lower(col("descricao"))
     categoria = (
@@ -250,3 +298,14 @@ def _separar_versoes(
         .drop("_ordem")
     )
     return correntes, conflitos
+
+
+def _mais_recente(dados: DataFrame, chave: str) -> DataFrame:
+    janela = Window.partitionBy(chave).orderBy(
+        col("atualizado_em").desc(), col("source_file_id").desc()
+    )
+    return (
+        dados.withColumn("_ordem", row_number().over(janela))
+        .where("_ordem = 1")
+        .drop("_ordem")
+    )
