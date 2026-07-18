@@ -184,7 +184,7 @@ gold = {
     "evolucao_contratual": calcular_evolucao_contratual(
         contratos_tecnologia, eventos_tecnologia
     ),
-    "rede_orgao_fornecedor": calcular_rede_orgao_fornecedor(
+    "arestas_orgao_fornecedor": calcular_rede_orgao_fornecedor(
         itens, resultados, contratacoes, vinculos
     ),
     "fornecedores_contexto": enriquecer_fornecedores_contexto(

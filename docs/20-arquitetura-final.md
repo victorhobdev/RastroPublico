@@ -1,5 +1,10 @@
 # RastroPublico — arquitetura executada da versão 1
 
+> **Registro histórico, substituído pela auditoria de 18/07/2026.** As contagens
+> abaixo descrevem a execução original e incluem populações depois invalidadas.
+> Para o estado defendível atual, consulte `00-indice-documentacao.md` e
+> `25-auditoria-e-baseline-portfolio.md`.
+
 ## 1. Escopo desta arquitetura
 
 Este documento descreve o que foi efetivamente executado até 18 de julho de

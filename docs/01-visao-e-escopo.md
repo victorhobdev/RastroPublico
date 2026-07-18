@@ -3,8 +3,8 @@
 ## 1. Estado do documento
 
 - **Status:** baseline revisada após parecer externo e reanálise interna.
-- **Versão:** 1.3.
-- **Data-base:** 17 de julho de 2026.
+- **Versão:** 1.4.
+- **Data-base:** 18 de julho de 2026.
 - **Fonte de contexto profissional:** `inventario-competencias-evidencias.md`.
 - **Escopo deste documento:** problema, público, perguntas, limites e critérios de sucesso.
 - **Fora deste documento:** schema físico definitivo, código, notebooks e configuração de infraestrutura.
@@ -102,7 +102,7 @@ O núcleo técnico será Spark + PySpark + Databricks + Delta Lake. Airflow, dbt
 - **domínio:** equipamentos e serviços de tecnologia;
 - **entidades:** contratações, itens, resultados, órgãos, unidades, fornecedores, contratos, termos e eventos contratuais disponíveis;
 - **fontes transacionais:** PNCP e arquivos oficiais Compras.gov/Comprasnet Contratos, tratados como canais distintos até reconciliação;
-- **enriquecimentos aprovados:** CNPJ/QSA, IBGE Geociências, IPCA e CEIS/CNEP, cada um com finalidade e cobertura próprias;
+- **enriquecimentos usados no produto:** CNPJ/QSA, IBGE Geociências e CEIS/CNEP, cada um com finalidade e cobertura próprias; IPCA foi coletado como experimento, mas não alimenta indicador publicado;
 - **processamento:** batch diário;
 - **plataforma principal:** Databricks Free;
 - **desenvolvimento:** módulos Python testáveis localmente e execução Spark/Delta no Databricks;
@@ -190,14 +190,14 @@ Não existe requisito de tempo real. O objetivo de duração dos jobs será defi
 A versão 1 estará concluída quando existir evidência reproduzível de:
 
 - ingestão da janela móvel de 12 meses para o recorte tecnológico aprovado, com cobertura por fonte, esfera e geografia medida e exposta, sem apresentar cobertura parcial como nacional completa;
-- Bronze imutável e rastreável;
+- landing original imutável e rastreável, separado do staging Delta reconstruível;
 - controle operacional separado dos payloads Bronze;
-- Silver tipada, deduplicada e atualizada por Delta `MERGE`;
+- Silver tipada e deduplicada; `MERGE` atômico onde implementado e reconstrução integral idempotente explicitada nas demais entidades;
 - tratamento de correções e cancelamentos;
 - reprocessamento parametrizado sem duplicação;
 - quarentena e métricas de cobertura;
 - classificação de equipamentos e serviços com método, versão e cobertura;
-- Gold de qualidade, concentração, recorrência, presença, variação de preços elegíveis, evolução contratual e rede órgão–fornecedor;
+- Gold de qualidade, concentração, recorrência, presença, evolução contratual e arestas órgão–fornecedor; preço permanece desabilitado até existir gate de comparabilidade;
 - estado explícito `não publicável` para indicador efetivamente avaliado cuja cobertura, comparabilidade ou semântica impeça resultado defensável, acompanhado da evidência que sustenta a decisão;
 - contratos, termos e eventos processados no nível suportado pela fonte, sem apresentar ausência de cobertura como funcionalidade entregue;
 - Jobs com histórico, parâmetros e retries;
@@ -206,7 +206,7 @@ A versão 1 estará concluída quando existir evidência reproduzível de:
 - dashboard Databricks AI/BI apoiado por consultas do Databricks SQL;
 - documentação de decisões, evidências e limitações.
 
-Os enriquecimentos aprovados atendem a finalidades limitadas: CNPJ/QSA normaliza identidade cadastral; IBGE organiza geografia; IPCA permite valores reais identificados separadamente dos nominais; CEIS/CNEP acrescentam contexto correcional datado. Presença ou ausência em cadastro correcional não classifica fraude, irregularidade ou risco.
+Os enriquecimentos atendem a finalidades limitadas: CNPJ/QSA normaliza identidade cadastral; IBGE organiza geografia; CEIS/CNEP acrescentam contexto correcional datado. O IPCA não é aplicado porque nenhum valor monetário agregado foi considerado semanticamente publicável. Presença ou ausência em cadastro correcional não classifica fraude, irregularidade ou risco.
 
 Se fonte, quota ou ambiente impedirem um item obrigatório, a versão 1 permanece incompleta até existir correção, mudança de ambiente ou revisão explícita de escopo aprovada. A documentação da limitação, isoladamente, não transforma o requisito em concluído.
 

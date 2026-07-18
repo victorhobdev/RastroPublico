@@ -3,7 +3,7 @@
 ## 1. Princípios
 
 1. Coleta HTTP e processamento distribuído têm responsabilidades diferentes.
-2. A Bronze preserva a evidência; correções ocorrem nas camadas seguintes.
+2. O landing preserva a evidência original; staging, Silver e Gold são reconstruíveis.
 3. O grão e a chave são definidos antes do schema físico.
 4. Toda escrita é idempotente e toda publicação é rastreável.
 5. Reprocessamento parte da Bronze, sem nova chamada à fonte quando o payload já existe.
@@ -19,7 +19,8 @@
 flowchart LR
     PNCP["APIs públicas do PNCP"] --> COLETA["Coleta HTTP local em Python"]
     CSV["Arquivos oficiais Compras.gov e Comprasnet"] --> COLETA
-    ENR["CNPJ, IBGE, IPCA e CEIS/CNEP"] --> COLETA
+    ENR["CNPJ, IBGE e CEIS/CNEP"] --> COLETA
+    EXP["IPCA experimental, sem métrica publicada"] -.-> COLETA
     COLETA --> OPSLOCAL["Manifesto operacional local"]
     COLETA --> ARQUIVOS["Payloads e manifestos da coleta"]
     ARQUIVOS --> ENVIO["Transferência controlada ao workspace"]
@@ -96,18 +97,18 @@ O local não substitui a evidência de execução Spark no Databricks.
 
 ## 5. Camadas de dados
 
-### 5.1 Bronze
+### 5.1 Landing imutável e Bronze de ingestão
 
 Características:
 
-- append-only;
+- arquivos originais append-only no landing;
 - payload original preservado;
 - uma observação por resposta/página para APIs ou por arquivo oficial para canais CSV;
 - hash determinístico;
 - metadados mínimos de origem e referência à execução;
 - nenhuma normalização destrutiva.
 
-A Bronze recebe respostas ou arquivos íntegros obtidos da fonte, inclusive quando o schema for inesperado e precisar bloquear o downstream. Falhas HTTP sem payload de fonte utilizável pertencem somente ao controle operacional. Arquivos grandes permanecem imutáveis no Volume e são registrados em `bronze.arquivos_fonte`; não serão armazenados como um único campo binário Delta.
+A evidência durável é o arquivo original no Volume/HD, acompanhado de manifesto e SHA-256. A Bronze de ingestão registra observações sem reescrever o arquivo. O recorte anual usado pelas transformações é materializado em `workspace.staging.*` com `overwrite`: ele é um snapshot reconstruível, não a Bronze imutável. Falhas HTTP sem payload de fonte utilizável pertencem somente ao controle operacional.
 
 | Tabela prevista | Grão | Conteúdo |
 | --- | --- | --- |
@@ -120,7 +121,7 @@ A Bronze recebe respostas ou arquivos íntegros obtidos da fonte, inclusive quan
 | `bronze.arquivos_fonte` | Um arquivo oficial íntegro | Hash, tamanho, período, dataset, sistema e caminho imutável no Volume |
 | `bronze.cnpj_raw` | Um arquivo/competência cadastral | CNPJ e QSA preservados conforme publicação oficial |
 | `bronze.geografia_raw` | Uma versão de referência | Códigos e hierarquias territoriais do IBGE |
-| `bronze.indices_precos_raw` | Uma observação de série oficial | IPCA por competência |
+| `bronze.indices_precos_raw` | Uma observação experimental | IPCA coletado, sem uso em indicador publicado |
 | `bronze.cadastros_correcionais_raw` | Uma ocorrência publicada | CEIS/CNEP com fonte e data de referência |
 
 Metadados mínimos:
@@ -166,7 +167,7 @@ Metadados mínimos:
 | `silver.unidades_normalizadas` | Um mapeamento de unidade | Comparabilidade de quantidade/preço |
 | `silver.registros_quarentena` | Um registro rejeitado por regra | Evidência, motivo e origem |
 | `silver.geografias` | Um código territorial versionado | Hierarquia oficial do IBGE |
-| `silver.indices_precos` | Uma competência do índice | IPCA e metadados da série |
+| `silver.indices_precos` | Uma competência experimental | IPCA preparado, sem consumo pela Gold atual |
 | `silver.contexto_correcional` | Fornecedor, cadastro e ocorrência | CEIS/CNEP datados e separados das métricas de contratação |
 
 ### 5.4 Gold
@@ -179,7 +180,7 @@ Metadados mínimos:
 | `gold.presenca_fornecedor` | Fornecedor, categoria, geografia e período |
 | `gold.variacao_precos` | Grupo comparável, geografia e período |
 | `gold.linha_tempo_contratual` | Contrato e evento temporal |
-| `gold.rede_orgao_fornecedor` | Órgão, fornecedor, categoria e período |
+| `gold.arestas_orgao_fornecedor` | Órgão, fornecedor, categoria e período; não constitui análise de grafos |
 
 Schemas e colunas são previsões. O Bloco 0 confirmou campos e chaves candidatas, mas eles só se tornam contratos físicos no bloco da respectiva entidade, com fixtures reais e testes.
 
@@ -200,20 +201,20 @@ O Bloco 6A confirmou os dois primeiros contratos físicos. `gold.qualidade_cober
 9. materializar Silver por `MERGE`;
 10. publicar Gold apenas após qualidade.
 
-### 6.2 Carga diária
+### 6.2 Carga incremental e reconstrução atual
 
 1. ler último watermark concluído e o último hash por dataset;
 2. baixar arquivos diários somente quando publicação ou conteúdo mudar;
 3. consultar endpoints de atualização do PNCP quando disponíveis;
 4. transferir e reconciliar os novos payloads e manifestos;
 5. registrar novas observações na Bronze e o estado da coleta em `ops.*`;
-6. identificar chaves afetadas;
-7. atualizar apenas entidades Silver afetadas;
-8. recalcular períodos Gold afetados;
+6. identificar chaves afetadas nas entidades que usam `MERGE`;
+7. atualizar essas entidades e reconstruir integralmente o núcleo Silver atual;
+8. reconstruir as Gold da janela;
 9. executar validações;
 10. avançar watermark somente após sucesso integral da coleta, transferência e materialização.
 
-A sobreposição inicial é de três dias. Enquanto o volume atual permanecer pequeno, o núcleo Silver é reconstruído integralmente a partir da Bronze histórica; MERGE por chaves afetadas só será adotado se o benchmark do Bloco 7 demonstrar necessidade e equivalência lógica.
+A sobreposição inicial é de três dias. A coleta, os artefatos e `silver.contratacoes` possuem comportamento incremental; o núcleo Silver e as Gold são reconstruções integrais idempotentes da janela. O projeto não chama esse trecho de incremental por chaves. Uma futura troca para `MERGE` exige medição, equivalência lógica e necessidade operacional.
 
 ### 6.3 Parâmetros mínimos
 
@@ -235,21 +236,18 @@ Uma resposta idêntica é detectada pelo hash do payload, mas continua auditáve
 
 `hash_payload` identifica a resposta HTTP bruta. Antes da deduplicação por entidade, a transformação calcula `hash_conteudo_entidade` sobre campos canônicos, excluindo metadados técnicos. A decisão do `MERGE` usa o hash da entidade, nunca o hash da página inteira.
 
-#### Contrato de canonicalização do conteúdo
+#### Contrato implementado de hash canônico
 
-O contrato é versionado por entidade e define:
+A função compartilhada recebe uma lista ordenada e explícita de campos de negócio,
+inclui `versao_canonicalizacao` dentro do `struct`, serializa por `to_json` com
+`ignoreNullFields=false` e calcula SHA-256. Metadados técnicos não entram na
+lista. A escala decimal e o tipo temporal são definidos antes do hash pelo schema
+da entidade. A versão fica armazenada junto ao registro.
 
-- lista exata de campos de negócio incluídos;
-- representação distinta para campo ausente e `NULL`, salvo equivalência explicitamente comprovada;
-- decimais serializados sem perda de precisão, com escala definida por campo;
-- timestamps convertidos para UTC, preservando a precisão disponível na fonte;
-- strings em Unicode NFC, sem normalização de negócio destrutiva;
-- arrays preservados quando a ordem for semântica e ordenados por chave canônica somente quando o contrato declarar que são conjuntos;
-- objetos aninhados serializados recursivamente com chaves ordenadas;
-- lista exata de metadados técnicos excluídos;
-- serialização JSON determinística em UTF-8 e algoritmo SHA-256.
-
-Qualquer mudança nesse contrato gera nova versão da regra e exige avaliação de reprocessamento; hashes de versões diferentes não são comparados como se fossem equivalentes.
+O código não promete normalização Unicode NFC, ordenação genérica de arrays ou
+distinção entre campo ausente e `NULL` depois da projeção Spark. Entidades que
+precisarem dessas garantias deverão implementá-las e elevar a versão do contrato
+antes de comparar hashes novos e antigos.
 
 ### 7.2 Versão corrente
 

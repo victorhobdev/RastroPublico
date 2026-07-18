@@ -18,6 +18,10 @@ databricks auth profiles
 databricks current-user me --profile rastro-publico
 ```
 
+No Linux/CI, execute `uv run ruff check .` e
+`uv run pytest --cov=rastro_publico --cov-report=term-missing`. O workflow
+`.github/workflows/ci.yml` fixa Python 3.12 e Java 21 e usa o `uv.lock`.
+
 ## 2. Parâmetros da execução de referência
 
 | Parâmetro | Valor |

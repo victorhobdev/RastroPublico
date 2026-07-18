@@ -79,8 +79,8 @@ UNION ALL
 SELECT 'evolucao_contratual', status_publicacao, count(*)
 FROM workspace.gold.evolucao_contratual GROUP BY status_publicacao
 UNION ALL
-SELECT 'rede_orgao_fornecedor', status_publicacao, count(*)
-FROM workspace.gold.rede_orgao_fornecedor GROUP BY status_publicacao;
+SELECT 'arestas_orgao_fornecedor', status_publicacao, count(*)
+FROM workspace.gold.arestas_orgao_fornecedor GROUP BY status_publicacao;
 
 -- 7. Proteções semânticas de concentração
 SELECT count(*) AS valores_invalidos
