@@ -29,9 +29,21 @@ def avaliar_regra(
     total: int,
     limite: int,
     severidade: str,
-) -> dict[str, str | int | float]:
+) -> dict[str, str | int | float | None]:
     if severidade not in {"erro", "alerta"}:
         raise ValueError(f"severidade invalida: {severidade}")
+    if total < 0 or observados < 0:
+        raise ValueError("contagens nao podem ser negativas")
+    if total == 0:
+        return {
+            "regra": regra,
+            "severidade": severidade,
+            "observados": observados,
+            "total": total,
+            "limite": limite,
+            "percentual": None,
+            "status": "SEM_DADOS",
+        }
     excedeu = observados > limite
     return {
         "regra": regra,
@@ -39,7 +51,7 @@ def avaliar_regra(
         "observados": observados,
         "total": total,
         "limite": limite,
-        "percentual": round(100 * observados / total, 4) if total else 0.0,
+        "percentual": round(100 * observados / total, 4),
         "status": "FAIL"
         if excedeu and severidade == "erro"
         else "ALERT"

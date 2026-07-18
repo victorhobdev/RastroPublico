@@ -64,9 +64,12 @@ def transformar_contratos(
     identificador = regexp_replace(
         _coluna_ou_nulo(bronze, "fonecedor_cnpj_cpf_idgener"), r"\D", ""
     )
-    tipo_pessoa = when(
-        lower(_coluna_ou_nulo(bronze, "fornecedor_tipo")).contains("fisica"), "PF"
-    ).otherwise("PJ")
+    tipo_pessoa_origem = lower(_coluna_ou_nulo(bronze, "fornecedor_tipo"))
+    tipo_pessoa = (
+        when(tipo_pessoa_origem.contains("fisica"), "PF")
+        .when(tipo_pessoa_origem.contains("juridica"), "PJ")
+        .otherwise("DESCONHECIDO")
+    )
     tipadas = (
         bronze.select(
             trim(_coluna_ou_nulo(bronze, "id")).alias("id_origem_contrato"),
@@ -99,9 +102,12 @@ def transformar_contratos(
             _decimal(bronze, "valor_global", 2).alias("valor_global"),
             _decimal(bronze, "valor_acumulado", 2).alias("valor_acumulado"),
             trim(_coluna_ou_nulo(bronze, "situacao")).alias("situacao_contrato"),
-            try_to_timestamp(_coluna_ou_nulo(bronze, "_coletado_em_utc")).alias(
-                "atualizado_em"
-            ),
+            coalesce(
+                try_to_timestamp(
+                    _coluna_ou_nulo(bronze, "_data_publicacao_arquivo")
+                ),
+                try_to_timestamp(_coluna_ou_nulo(bronze, "_coletado_em_utc")),
+            ).alias("atualizado_em"),
             col("_source_file_id").alias("source_file_id"),
         )
         .withColumn(
@@ -116,7 +122,9 @@ def transformar_contratos(
             "fornecedor_id",
             when(
                 col("tipo_pessoa") == "PF", pseudonimizar("chave_fornecedor")
-            ).otherwise(sha2("chave_fornecedor", 256)),
+            )
+            .when(col("tipo_pessoa") == "PJ", sha2("chave_fornecedor", 256))
+            .otherwise(pseudonimizar("chave_fornecedor")),
         )
         .withColumn(
             "identificador_publico",
@@ -171,6 +179,7 @@ def transformar_contratos(
             "situacao_contrato",
         ],
         "contrato_id",
+        "contrato_snapshot_v1",
     )
     fornecedores = correntes.select(
         "fornecedor_id",
@@ -224,9 +233,12 @@ def transformar_itens_contrato(
             _timestamp_composto(bronze, "data_inicio_item").alias(
                 "data_inicio_item"
             ),
-            try_to_timestamp(_coluna_ou_nulo(bronze, "_coletado_em_utc")).alias(
-                "atualizado_em"
-            ),
+            coalesce(
+                try_to_timestamp(
+                    _coluna_ou_nulo(bronze, "_data_publicacao_arquivo")
+                ),
+                try_to_timestamp(_coluna_ou_nulo(bronze, "_coletado_em_utc")),
+            ).alias("atualizado_em"),
             col("_source_file_id").alias("source_file_id"),
         )
         .withColumn(
@@ -282,6 +294,7 @@ def transformar_itens_contrato(
             "data_inicio_item",
         ],
         "contrato_item_id",
+        "contrato_item_snapshot_v1",
     )
     correntes = classificar_servicos(classificar_equipamentos(correntes))
     return correntes, quarentena, conflitos
@@ -321,6 +334,9 @@ def transformar_eventos_contrato(
             coalesce(
                 _timestamp_composto(bronze, "alterado_em"),
                 _timestamp_composto(bronze, "criado_em"),
+                try_to_timestamp(
+                    _coluna_ou_nulo(bronze, "_data_publicacao_arquivo")
+                ),
                 try_to_timestamp(_coluna_ou_nulo(bronze, "_coletado_em_utc")),
             ).alias("atualizado_em"),
             col("_source_file_id").alias("source_file_id"),
@@ -380,6 +396,7 @@ def transformar_eventos_contrato(
             "situacao_termo",
         ],
         "evento_contrato_id",
+        "evento_contrato_snapshot_v1",
     )
     return correntes, quarentena, conflitos
 

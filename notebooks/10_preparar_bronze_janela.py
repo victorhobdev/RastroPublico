@@ -39,6 +39,10 @@ def ler_dataset(dataset, sistema):
             .withColumn("_sistema_origem", lit(sistema))
             .withColumn("_dataset_origem", lit(dataset))
             .withColumn("_coletado_em_utc", lit(manifesto["coletado_em_utc"]))
+            .withColumn(
+                "_data_publicacao_arquivo",
+                lit(manifesto.get("data_publicacao_arquivo")),
+            )
         )
         partes.append(parte)
     if not partes:

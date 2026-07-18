@@ -7,13 +7,13 @@ from pyspark.sql.functions import (
     lower,
     row_number,
     sha2,
-    struct,
-    to_json,
     to_timestamp,
     trim,
     when,
 )
 from pyspark.sql.types import DecimalType
+
+from rastro_publico.transformacoes.nucleo import adicionar_hash_conteudo
 
 
 def transformar_contratacoes(
@@ -79,12 +79,8 @@ def transformar_contratacoes(
         "ind_atual",
         "contratacao_excluida",
     ]
-    validas = validas.withColumn(
-        "hash_conteudo_entidade",
-        sha2(
-            to_json(struct(*campos_conteudo), options={"ignoreNullFields": "false"}),
-            256,
-        ),
+    validas = adicionar_hash_conteudo(
+        validas, campos_conteudo, "contratacao_v1"
     )
     chaves_conflito = (
         validas.groupBy("contratacao_id", "atualizado_em")

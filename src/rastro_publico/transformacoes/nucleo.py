@@ -55,10 +55,8 @@ def transformar_itens(bronze: DataFrame) -> tuple[DataFrame, DataFrame, DataFram
             sha2(concat_ws("|", "contratacao_id", "numero_item"), 256),
         )
         .withColumn(
-            "motivo_quarentena",
-            when(col("numero_controle_pncp").isNull(), "contratacao_ausente")
-            .when(col("numero_item").isNull(), "numero_item_ausente")
-            .when(
+            "motivo_ineligibilidade_preco",
+            when(
                 col("quantidade").isNull() | (col("quantidade") <= 0),
                 "quantidade_nao_positiva",
             )
@@ -67,7 +65,15 @@ def transformar_itens(bronze: DataFrame) -> tuple[DataFrame, DataFrame, DataFram
                 "unidade_ausente",
             )
             .when(col("valor_unitario_estimado") < 0, "valor_unitario_negativo")
-            .when(col("valor_total") < 0, "valor_total_negativo")
+            .when(col("valor_total") < 0, "valor_total_negativo"),
+        )
+        .withColumn(
+            "elegivel_preco", col("motivo_ineligibilidade_preco").isNull()
+        )
+        .withColumn(
+            "motivo_quarentena",
+            when(col("numero_controle_pncp").isNull(), "contratacao_ausente")
+            .when(col("numero_item").isNull(), "numero_item_ausente")
             .when(col("atualizado_em").isNull(), "data_atualizacao_invalida"),
         )
     )
@@ -85,9 +91,12 @@ def transformar_itens(bronze: DataFrame) -> tuple[DataFrame, DataFrame, DataFram
             "unidade_medida",
             "valor_unitario_estimado",
             "valor_total",
+            "elegivel_preco",
+            "motivo_ineligibilidade_preco",
             "atualizado_em",
         ],
         "item_id",
+        "item_v1",
     )
     return correntes, quarentena, conflitos
 
@@ -157,11 +166,13 @@ def transformar_resultados(
             "fornecedor_id",
             when(
                 col("tipo_pessoa") == "PF", pseudonimizar("chave_fornecedor")
-            ).otherwise(sha2("chave_fornecedor", 256)),
+            )
+            .when(col("tipo_pessoa") == "PJ", sha2("chave_fornecedor", 256))
+            .otherwise(pseudonimizar("chave_fornecedor")),
         )
         .withColumn(
             "identificador_publico",
-            when(col("tipo_pessoa") != "PF", col("identificador_normalizado")),
+            when(col("tipo_pessoa") == "PJ", col("identificador_normalizado")),
         )
         .withColumn(
             "motivo_quarentena",
@@ -196,6 +207,7 @@ def transformar_resultados(
             "atualizado_em",
         ],
         "resultado_id",
+        "resultado_v1",
     )
     resultados = correntes.drop(
         "identificador_normalizado", "identificador_publico", "chave_fornecedor"
@@ -433,13 +445,10 @@ def _separar_versoes(
     chaves_conflito: list[str],
     campos_conteudo: list[str],
     chave_entidade: str,
+    versao_canonicalizacao: str,
 ) -> tuple[DataFrame, DataFrame]:
-    com_hash = validas.withColumn(
-        "hash_conteudo_entidade",
-        sha2(
-            to_json(struct(*campos_conteudo), options={"ignoreNullFields": "false"}),
-            256,
-        ),
+    com_hash = adicionar_hash_conteudo(
+        validas, campos_conteudo, versao_canonicalizacao
     )
     empates = (
         com_hash.groupBy(*chaves_conflito)
@@ -458,6 +467,21 @@ def _separar_versoes(
         .drop("_ordem")
     )
     return correntes, conflitos
+
+
+def adicionar_hash_conteudo(
+    dados: DataFrame, campos_conteudo: list[str], versao: str
+) -> DataFrame:
+    return dados.withColumn("versao_canonicalizacao", lit(versao)).withColumn(
+        "hash_conteudo_entidade",
+        sha2(
+            to_json(
+                struct(lit(versao).alias("_versao_canonicalizacao"), *campos_conteudo),
+                options={"ignoreNullFields": "false"},
+            ),
+            256,
+        ),
+    )
 
 
 def _mais_recente(dados: DataFrame, chave: str) -> DataFrame:
