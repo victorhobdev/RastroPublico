@@ -65,8 +65,26 @@ def entradas(spark):
     )
     qualidade = spark.createDataFrame(
         [
-            ("run-1", "registros_em_quarentena", 2, 100, 2.0, "alerta", "ALERT", "2026-07-17"),
-            ("run-2", "registros_em_quarentena", 3, 120, 2.5, "alerta", "ALERT", "2026-07-18"),
+            (
+                "run-1",
+                "registros_em_quarentena",
+                2,
+                100,
+                2.0,
+                "alerta",
+                "ALERT",
+                "2026-07-17",
+            ),
+            (
+                "run-2",
+                "registros_em_quarentena",
+                3,
+                120,
+                2.5,
+                "alerta",
+                "ALERT",
+                "2026-07-18",
+            ),
         ],
         [
             "run_id",
