@@ -5,9 +5,14 @@ import pytest
 from pyspark.sql import SparkSession
 
 from rastro_publico.transformacoes.gold import (
+    calcular_evolucao_contratual,
     calcular_cobertura_servicos,
     calcular_concentracao_fornecedores,
+    calcular_presenca_fornecedores,
     calcular_qualidade_cobertura,
+    calcular_recorrencia_orgao_fornecedor,
+    calcular_rede_orgao_fornecedor,
+    calcular_variacao_precos,
 )
 
 
@@ -175,3 +180,141 @@ def test_cobertura_servicos_mantem_preco_nao_publicavel(spark) -> None:
     assert cloud.unidades_distintas == 2
     assert cloud.itens_com_preco == 2
     assert cloud.status_publicacao_preco == "nao_publicavel"
+
+
+def test_recorrencia_presenca_e_rede_reconciliam_relacoes(spark) -> None:
+    itens = spark.createDataFrame(
+        [
+            ("c1", "i1", "monitor"),
+            ("c2", "i2", "monitor"),
+            ("c3", "i3", "servidor"),
+        ],
+        ["contratacao_id", "item_id", "categoria_tecnologia"],
+    )
+    resultados = spark.createDataFrame(
+        [
+            ("r1", "i1", "c1", "f1", 100.0, False),
+            ("r2", "i2", "c2", "f1", 150.0, False),
+            ("r3", "i3", "c3", "f2", 300.0, False),
+        ],
+        [
+            "resultado_id",
+            "item_id",
+            "contratacao_id",
+            "fornecedor_id",
+            "valor_total_homologado",
+            "cancelado",
+        ],
+    )
+    contratacoes = spark.createDataFrame(
+        [
+            ("c1", "2026-05-01", "6", "Pregao"),
+            ("c2", "2026-06-01", "6", "Pregao"),
+            ("c3", "2026-06-02", "8", "Dispensa"),
+        ],
+        ["contratacao_id", "publicado_em", "modalidade_id", "modalidade"],
+    )
+    vinculos = spark.createDataFrame(
+        [("c1", "o1", "u1"), ("c2", "o1", "u1"), ("c3", "o2", "u2")],
+        ["contratacao_id", "orgao_id", "unidade_id"],
+    )
+    unidades = spark.createDataFrame(
+        [("u1", "RJ", "Rio de Janeiro"), ("u2", "SP", "Sao Paulo")],
+        ["unidade_id", "uf", "municipio"],
+    )
+
+    recorrencia = calcular_recorrencia_orgao_fornecedor(
+        itens, resultados, contratacoes, vinculos
+    ).where("orgao_id = 'o1' AND fornecedor_id = 'f1'").first()
+    presenca = calcular_presenca_fornecedores(
+        itens, resultados, contratacoes, vinculos, unidades
+    ).where("fornecedor_id = 'f1'").first()
+    rede = calcular_rede_orgao_fornecedor(
+        itens, resultados, contratacoes, vinculos
+    ).where("orgao_id = 'o1' AND fornecedor_id = 'f1'").first()
+
+    assert recorrencia.contratacoes_distintas == 2
+    assert recorrencia.periodos_distintos == 2
+    assert recorrencia.dias_entre_primeira_ultima == 31
+    assert presenca.orgaos_distintos == 1
+    assert presenca.periodos_distintos == 2
+    assert presenca.valor_total_homologado == pytest.approx(250.0)
+    assert rede.resultados_distintos == 2
+    assert rede.status_publicacao == "publicada"
+
+
+def test_preco_por_categoria_e_unidade_e_medido_mas_nao_publicado(spark) -> None:
+    itens = spark.createDataFrame(
+        [
+            ("c1", "i1", "monitor", "UN", "M"),
+            ("c1", "i2", "monitor", "UN", "M"),
+            ("c1", "i3", "monitor", "UN", "M"),
+        ],
+        [
+            "contratacao_id",
+            "item_id",
+            "categoria_tecnologia",
+            "unidade_medida",
+            "material_ou_servico",
+        ],
+    )
+    resultados = spark.createDataFrame(
+        [
+            ("r1", "i1", "c1", 90.0, False),
+            ("r2", "i2", "c1", 100.0, False),
+            ("r3", "i3", "c1", 120.0, False),
+        ],
+        [
+            "resultado_id",
+            "item_id",
+            "contratacao_id",
+            "valor_unitario_homologado",
+            "cancelado",
+        ],
+    )
+    contratacoes = spark.createDataFrame(
+        [("c1", "2026-06-01")], ["contratacao_id", "publicado_em"]
+    )
+
+    grupo = calcular_variacao_precos(itens, resultados, contratacoes).first()
+
+    assert grupo.observacoes == 3
+    assert grupo.mediana == pytest.approx(100.0)
+    assert grupo.status_publicacao == "nao_publicavel"
+    assert grupo.limitacao == "produto_nao_homogeneo_em_categoria_unidade"
+
+
+def test_evolucao_contratual_resume_eventos_e_extensao(spark) -> None:
+    contratos = spark.createDataFrame(
+        [("ct1", "o1", "f1", "2026-01-01", "2026-12-31", 1000.0, 1200.0)],
+        [
+            "contrato_id",
+            "orgao_codigo",
+            "fornecedor_id",
+            "vigencia_inicio",
+            "vigencia_fim",
+            "valor_inicial",
+            "valor_global",
+        ],
+    )
+    eventos = spark.createDataFrame(
+        [
+            ("e1", "ct1", "Aditivo", "2026-06-01", "2027-03-31", 200.0),
+            ("e2", "ct1", "Apostilamento", "2026-07-01", None, 50.0),
+        ],
+        [
+            "evento_contrato_id",
+            "contrato_id",
+            "tipo_evento",
+            "data_assinatura",
+            "vigencia_fim",
+            "variacao_valor",
+        ],
+    )
+
+    linha = calcular_evolucao_contratual(contratos, eventos).first()
+
+    assert linha.eventos_distintos == 2
+    assert linha.variacao_valor_acumulada == pytest.approx(250.0)
+    assert linha.extensao_vigencia_dias == 90
+    assert linha.status_publicacao == "publicada"

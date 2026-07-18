@@ -4,12 +4,17 @@ from pyspark.sql.functions import (
     coalesce,
     count,
     countDistinct,
+    datediff,
     date_format,
     first,
+    greatest,
     lit,
     max as spark_max,
+    min as spark_min,
+    percentile_approx,
     row_number,
     sum as spark_sum,
+    to_date,
     to_timestamp,
     when,
 )
@@ -177,7 +182,13 @@ def calcular_concentracao_fornecedores(
         "modalidade",
     ]
     base = (
-        resultados.join(
+        resultados.select(
+            "resultado_id",
+            "item_id",
+            "fornecedor_id",
+            "valor_total_homologado",
+            "cancelado",
+        ).join(
             itens.select("item_id", "contratacao_id", "categoria_tecnologia"),
             "item_id",
         )
@@ -287,4 +298,233 @@ def calcular_cobertura_servicos(itens: DataFrame) -> DataFrame:
         .withColumn("cobertura_preco", col("itens_com_preco") / col("total_itens"))
         .withColumn("status_publicacao_preco", lit("nao_publicavel"))
         .withColumn("limitacao_preco", lit("escopo_unidade_sla_nao_estruturados"))
+    )
+
+
+def _base_relacoes(
+    itens: DataFrame,
+    resultados: DataFrame,
+    contratacoes: DataFrame,
+    vinculos: DataFrame,
+) -> DataFrame:
+    return (
+        resultados.select(
+            "resultado_id",
+            "item_id",
+            "fornecedor_id",
+            "valor_total_homologado",
+            "cancelado",
+        ).join(
+            itens.select("item_id", "contratacao_id", "categoria_tecnologia"),
+            "item_id",
+        )
+        .join(
+            contratacoes.select(
+                "contratacao_id", "publicado_em", "modalidade_id", "modalidade"
+            ),
+            "contratacao_id",
+        )
+        .join(
+            vinculos.select("contratacao_id", "orgao_id", "unidade_id"),
+            "contratacao_id",
+        )
+        .withColumn("data_publicacao", to_date(to_timestamp("publicado_em")))
+        .withColumn("periodo", date_format("data_publicacao", "yyyy-MM"))
+        .where(
+            (~col("cancelado"))
+            & col("fornecedor_id").isNotNull()
+            & col("orgao_id").isNotNull()
+            & col("data_publicacao").isNotNull()
+            & col("categoria_tecnologia").isNotNull()
+            & (col("categoria_tecnologia") != "incerto")
+        )
+    )
+
+
+def calcular_recorrencia_orgao_fornecedor(
+    itens: DataFrame,
+    resultados: DataFrame,
+    contratacoes: DataFrame,
+    vinculos: DataFrame,
+) -> DataFrame:
+    return (
+        _base_relacoes(itens, resultados, contratacoes, vinculos)
+        .groupBy("orgao_id", "fornecedor_id", "categoria_tecnologia")
+        .agg(
+            countDistinct("contratacao_id").alias("contratacoes_distintas"),
+            countDistinct("resultado_id").alias("resultados_distintos"),
+            countDistinct("periodo").alias("periodos_distintos"),
+            spark_min("data_publicacao").alias("primeira_ocorrencia"),
+            spark_max("data_publicacao").alias("ultima_ocorrencia"),
+            spark_sum(
+                when(col("valor_total_homologado") > 0, col("valor_total_homologado"))
+                .otherwise(0)
+                .cast("decimal(38,2)")
+            ).alias("valor_total_homologado"),
+        )
+        .withColumn(
+            "dias_entre_primeira_ultima",
+            datediff("ultima_ocorrencia", "primeira_ocorrencia"),
+        )
+        .withColumn("status_publicacao", lit("publicada"))
+        .withColumn(
+            "limitacao",
+            lit("recorrencia_descritiva_nao_indica_irregularidade"),
+        )
+    )
+
+
+def calcular_presenca_fornecedores(
+    itens: DataFrame,
+    resultados: DataFrame,
+    contratacoes: DataFrame,
+    vinculos: DataFrame,
+    unidades: DataFrame,
+) -> DataFrame:
+    return (
+        _base_relacoes(itens, resultados, contratacoes, vinculos)
+        .join(unidades.select("unidade_id", "uf", "municipio"), "unidade_id", "left")
+        .groupBy("fornecedor_id", "categoria_tecnologia")
+        .agg(
+            countDistinct("orgao_id").alias("orgaos_distintos"),
+            countDistinct("unidade_id").alias("unidades_distintas"),
+            countDistinct("uf").alias("ufs_distintas"),
+            countDistinct("municipio").alias("municipios_distintos"),
+            countDistinct("modalidade_id").alias("modalidades_distintas"),
+            countDistinct("periodo").alias("periodos_distintos"),
+            countDistinct("contratacao_id").alias("contratacoes_distintas"),
+            spark_sum(
+                when(col("valor_total_homologado") > 0, col("valor_total_homologado"))
+                .otherwise(0)
+                .cast("decimal(38,2)")
+            ).alias("valor_total_homologado"),
+        )
+        .withColumn("status_publicacao", lit("publicada"))
+        .withColumn("limitacao", lit("presenca_restrita_a_resultados_homologados"))
+    )
+
+
+def calcular_rede_orgao_fornecedor(
+    itens: DataFrame,
+    resultados: DataFrame,
+    contratacoes: DataFrame,
+    vinculos: DataFrame,
+) -> DataFrame:
+    return (
+        _base_relacoes(itens, resultados, contratacoes, vinculos)
+        .groupBy("orgao_id", "fornecedor_id", "categoria_tecnologia")
+        .agg(
+            countDistinct("contratacao_id").alias("contratacoes_distintas"),
+            countDistinct("resultado_id").alias("resultados_distintos"),
+            countDistinct("periodo").alias("periodos_distintos"),
+            countDistinct("modalidade_id").alias("modalidades_distintas"),
+            spark_sum(
+                when(col("valor_total_homologado") > 0, col("valor_total_homologado"))
+                .otherwise(0)
+                .cast("decimal(38,2)")
+            ).alias("valor_total_homologado"),
+        )
+        .withColumn("status_publicacao", lit("publicada"))
+        .withColumn(
+            "limitacao", lit("aresta_descritiva_nao_indica_irregularidade")
+        )
+    )
+
+
+def calcular_variacao_precos(
+    itens: DataFrame, resultados: DataFrame, contratacoes: DataFrame
+) -> DataFrame:
+    return (
+        resultados.select(
+            "resultado_id",
+            "item_id",
+            "valor_unitario_homologado",
+            "cancelado",
+        ).join(
+            itens.select(
+                "item_id",
+                "contratacao_id",
+                "categoria_tecnologia",
+                "unidade_medida",
+                "material_ou_servico",
+            ),
+            "item_id",
+        )
+        .join(contratacoes.select("contratacao_id", "publicado_em"), "contratacao_id")
+        .withColumn("periodo", date_format(to_timestamp("publicado_em"), "yyyy-MM"))
+        .where(
+            (~col("cancelado"))
+            & (col("material_ou_servico") == "M")
+            & (col("categoria_tecnologia") != "incerto")
+            & col("unidade_medida").isNotNull()
+            & (col("valor_unitario_homologado") > 0)
+            & col("periodo").isNotNull()
+        )
+        .groupBy("periodo", "categoria_tecnologia", "unidade_medida")
+        .agg(
+            countDistinct("resultado_id").alias("observacoes"),
+            percentile_approx("valor_unitario_homologado", 0.1, 10000).alias("p10"),
+            percentile_approx("valor_unitario_homologado", 0.5, 10000).alias(
+                "mediana"
+            ),
+            percentile_approx("valor_unitario_homologado", 0.9, 10000).alias("p90"),
+            spark_min("valor_unitario_homologado").alias("minimo"),
+            spark_max("valor_unitario_homologado").alias("maximo"),
+        )
+        .withColumn("status_publicacao", lit("nao_publicavel"))
+        .withColumn(
+            "limitacao", lit("produto_nao_homogeneo_em_categoria_unidade")
+        )
+    )
+
+
+def calcular_evolucao_contratual(
+    contratos: DataFrame, eventos: DataFrame
+) -> DataFrame:
+    resumo_eventos = eventos.groupBy("contrato_id").agg(
+        countDistinct("evento_contrato_id").alias("eventos_distintos"),
+        countDistinct("tipo_evento").alias("tipos_evento_distintos"),
+        spark_min(to_date("data_assinatura")).alias("primeiro_evento_em"),
+        spark_max(to_date("data_assinatura")).alias("ultimo_evento_em"),
+        spark_max(to_date("vigencia_fim")).alias("vigencia_fim_eventos"),
+        spark_sum(coalesce(col("variacao_valor"), lit(0))).alias(
+            "variacao_valor_acumulada"
+        ),
+    )
+    return (
+        contratos.select(
+            "contrato_id",
+            "orgao_codigo",
+            "fornecedor_id",
+            to_date("vigencia_inicio").alias("vigencia_inicio"),
+            to_date("vigencia_fim").alias("vigencia_fim_original"),
+            "valor_inicial",
+            "valor_global",
+        )
+        .join(resumo_eventos, "contrato_id", "left")
+        .fillna(
+            {
+                "eventos_distintos": 0,
+                "tipos_evento_distintos": 0,
+                "variacao_valor_acumulada": 0,
+            }
+        )
+        .withColumn(
+            "vigencia_fim_atual",
+            greatest("vigencia_fim_original", "vigencia_fim_eventos"),
+        )
+        .withColumn(
+            "extensao_vigencia_dias",
+            when(
+                col("vigencia_fim_original").isNotNull(),
+                greatest(
+                    datediff("vigencia_fim_atual", "vigencia_fim_original"), lit(0)
+                ),
+            ),
+        )
+        .withColumn("status_publicacao", lit("publicada"))
+        .withColumn(
+            "limitacao",
+            lit("fonte_comprasnet_com_vinculo_pncp_nativo_parcial_c3"),
+        )
     )

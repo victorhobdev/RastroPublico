@@ -1,4 +1,5 @@
 import json
+import gzip
 from io import BytesIO
 
 import pytest
@@ -102,3 +103,20 @@ def test_manifesta_arquivo_existente_sem_reescrever_payload(tmp_path) -> None:
     )
     assert documento["data_publicacao_arquivo"] == "2026-07"
     assert documento["status_http"] is None
+
+
+def test_descompacta_resposta_http_gzip_antes_de_persistir(tmp_path) -> None:
+    class RespostaGzip(Resposta):
+        headers = {"Content-Encoding": "gzip"}
+
+    destino = tmp_path / "municipios.json"
+    baixar_arquivo(
+        url="https://dados.example/municipios",
+        destino=destino,
+        sistema_origem="ibge",
+        dataset_origem="municipios",
+        run_id="run-gzip",
+        abrir=lambda *_args, **_kwargs: RespostaGzip(gzip.compress(b'[{"id": 1}]')),
+    )
+
+    assert destino.read_bytes() == b'[{"id": 1}]'

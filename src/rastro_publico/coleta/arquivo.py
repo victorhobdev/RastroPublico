@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import gzip
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -15,6 +16,7 @@ def baixar_arquivo(
     sistema_origem: str,
     dataset_origem: str,
     run_id: str,
+    canal_entrega: str = "repositorio_csv",
     abrir: Callable = urlopen,
     tamanho_bloco: int = 1024 * 1024,
     minimo_bytes: int = 1,
@@ -24,11 +26,19 @@ def baixar_arquivo(
     temporario = destino.with_suffix(f"{destino.suffix}.part")
     hash_arquivo = sha256()
     tamanho_bytes = 0
-    request = Request(url, headers={"User-Agent": "RastroPublico/0.1"})
+    request = Request(
+        url,
+        headers={"User-Agent": "RastroPublico/0.1", "Accept-Encoding": "identity"},
+    )
 
     try:
         with abrir(request, timeout=timeout) as resposta, temporario.open("wb") as arquivo:
-            while bloco := resposta.read(tamanho_bloco):
+            conteudo = (
+                gzip.GzipFile(fileobj=resposta)
+                if resposta.headers.get("Content-Encoding") == "gzip"
+                else resposta
+            )
+            while bloco := conteudo.read(tamanho_bloco):
                 arquivo.write(bloco)
                 hash_arquivo.update(bloco)
                 tamanho_bytes += len(bloco)
@@ -46,7 +56,7 @@ def baixar_arquivo(
     documento = {
         "run_id": run_id,
         "sistema_origem": sistema_origem,
-        "canal_entrega": "repositorio_csv",
+        "canal_entrega": canal_entrega,
         "dataset_origem": dataset_origem,
         "url_origem": url,
         "arquivo": destino.name,
@@ -71,6 +81,7 @@ def manifestar_arquivo_existente(
     dataset_origem: str,
     run_id: str,
     data_publicacao_arquivo: str | None = None,
+    canal_entrega: str = "repositorio_csv",
 ) -> Path:
     digest = sha256()
     tamanho_bytes = 0
@@ -88,7 +99,7 @@ def manifestar_arquivo_existente(
             {
                 "run_id": run_id,
                 "sistema_origem": sistema_origem,
-                "canal_entrega": "repositorio_csv",
+                "canal_entrega": canal_entrega,
                 "dataset_origem": dataset_origem,
                 "url_origem": url,
                 "arquivo": arquivo.name,
