@@ -74,6 +74,12 @@ def test_detecta_arquivo_ja_carregado(spark, monkeypatch) -> None:
 def test_mapeia_somente_datasets_bronze_aprovados() -> None:
     assert tabela_bronze("VW_FT_PNCP_COMPRA_ITEM") == "workspace.bronze.itens_raw"
     assert tabela_bronze("VW_DM_PNCP_ITEM_RESULTADO") == "workspace.bronze.resultados_raw"
+    assert tabela_bronze("CONTRATOS_CONTRATOS") == "workspace.bronze.contratos_raw"
+    assert tabela_bronze("CONTRATOS_ITENS") == "workspace.bronze.contrato_itens_raw"
+    assert (
+        tabela_bronze("CONTRATOS_HISTORICOS")
+        == "workspace.bronze.contrato_historicos_raw"
+    )
 
     with pytest.raises(ValueError, match="dataset nao suportado"):
         tabela_bronze("tabela_injetada")

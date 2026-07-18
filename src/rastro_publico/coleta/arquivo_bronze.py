@@ -5,6 +5,9 @@ TABELAS_BRONZE = {
     "VW_FT_PNCP_COMPRA": "workspace.bronze.contratacoes_raw",
     "VW_FT_PNCP_COMPRA_ITEM": "workspace.bronze.itens_raw",
     "VW_DM_PNCP_ITEM_RESULTADO": "workspace.bronze.resultados_raw",
+    "CONTRATOS_CONTRATOS": "workspace.bronze.contratos_raw",
+    "CONTRATOS_ITENS": "workspace.bronze.contrato_itens_raw",
+    "CONTRATOS_HISTORICOS": "workspace.bronze.contrato_historicos_raw",
 }
 
 
