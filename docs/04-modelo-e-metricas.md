@@ -198,7 +198,8 @@ Serviços de desenvolvimento, outsourcing, infraestrutura e cloud não serão co
 - **Grão:** período, órgão, categoria tecnológica e modalidade.
 - **Base principal:** valor homologado dos resultados válidos.
 - **Base separada:** valor contratual, quando analisado em tabela própria.
-- **Métricas:** fornecedores distintos, participação Top 1, participação Top 3 e HHI.
+- **Métricas monetárias:** Top 1, Top 3 e HHI permanecem `não publicáveis` até o
+  gate de semântica do valor homologado ser aprovado sobre a fonte.
 - **Cobertura:** percentual de registros e valor com fornecedor, categoria e valor válidos.
 - **Interpretação permitida:** grau de concentração observado naquele grão e período.
 - **Evitar:** afirmar favorecimento, ausência de competição ou irregularidade.
@@ -210,14 +211,18 @@ Fórmulas:
 - `top_3 = soma(das tres maiores participacoes)`;
 - `hhi = soma(participacao_fornecedor²)`.
 
-O HHI será publicado na escala `0–1`, acompanhado do número de fornecedores e cobertura. Nenhum limiar jurídico ou concorrencial será assumido sem contexto aplicável.
+Se o gate vier a ser aprovado, o HHI usará a escala `0–1`, acompanhado do número
+de fornecedores e cobertura. Enquanto isso, HHI, Top 1, Top 3, totais e cobertura
+por valor permanecem nulos.
 
 #### Contrato físico confirmado no Bloco 6A
 
 - população elegível: resultado Silver não cancelado, com valor homologado positivo, fornecedor, órgão, período de publicação, modalidade e categoria tecnológica diferente de `incerto`;
 - grão temporal inicial: mês de publicação da contratação;
-- valor: somente `valor_total_homologado` do resultado; valores estimados e contratuais não entram no denominador;
-- publicação inicial: ao menos três resultados, dois fornecedores e cobertura de valor de 80%; abaixo disso o grupo permanece calculado, mas recebe `nao_publicavel` e uma limitação explícita;
+- valor: somente `valor_total_homologado` do resultado, condicionado à unicidade,
+  positividade, coerência com quantidade × valor unitário e validação da fonte;
+- publicação inicial: desabilitada até validação da fonte; grupos sem resultado
+  monetário elegível permanecem na Gold com cobertura semântica zero;
 - validações: `0 <= top_1 <= top_3 <= 1`, `0 <= hhi <= 1`, cobertura entre 0 e 1, reconciliação do valor e equivalência entre PySpark e Spark SQL;
 - revisão: os mínimos são um gate analítico inicial, não um limiar jurídico, e serão reavaliados com a população de 12 meses no Bloco 11.
 
@@ -237,7 +242,8 @@ No recorte de um dia do Bloco 6A, os dois grupos observados possuíam somente um
 
 - **Pergunta:** quão distribuída é a atuação do fornecedor?
 - **Grão:** fornecedor, categoria e período.
-- **Métricas:** órgãos, unidades, UFs, municípios, modalidades e valor total distintos.
+- **Métricas:** órgãos, unidades, UFs, municípios e modalidades; valor total fica
+  nulo enquanto o gate monetário estiver fechado.
 - **Limitação:** ausência nas fontes coletadas não comprova ausência em toda contratação pública.
 - **Interpretação permitida:** presença dentro da cobertura coletada.
 
@@ -264,7 +270,8 @@ No recorte de um dia do Bloco 6A, os dois grupos observados possuíam somente um
 
 - **Pergunta:** quais relações conectam órgãos e fornecedores?
 - **Grão:** aresta órgão–fornecedor, categoria e período.
-- **Métricas:** valor, contratações, contratos, recorrência e modalidades.
+- **Métricas:** contratações, contratos, recorrência e modalidades; valor fica
+  nulo enquanto o gate monetário estiver fechado.
 - **Limitação:** é uma lista de arestas agregadas, não uma análise de grafos; não calcula centralidade, comunidades ou caminhos e não comprova relação societária ou pessoal.
 - **Interpretação permitida:** intensidade e distribuição das relações de compra.
 
@@ -312,22 +319,20 @@ Cada indicador deve ser efetivamente avaliado e terminar como `publicado` ou `n�
 - evolução contratual foi publicada com eventos observados, mas a ligação entre
   contratação e contrato permanece explicitamente parcial (`C3`).
 
-## 12. Baseline analítica corrigida
+## 12. Baseline histórica pendente de recálculo
 
-| Indicador | Resultado auditado | Estado |
+| Indicador | Resultado histórico | Estado atual |
 | --- | ---: | --- |
-| compras de tecnologia | 12.252 | `publicada` |
-| itens de tecnologia | 29.207 | `publicada` |
-| resultados de tecnologia | 20.664 | `publicada` |
-| fornecedores de tecnologia distintos | 4.246 | `publicada` |
-| relações recorrentes (`contratações distintas >= 2`) | 828 | `publicada` |
-| contratos ligados a itens tecnológicos | 1.537 | `publicada` com limitação C3 |
-| eventos desses contratos | 1.755 | `publicada` com limitação C3 |
+| compras de tecnologia | 12.252 | `historico_nao_validado` |
+| itens de tecnologia | 29.207 | `historico_nao_validado` |
+| resultados de tecnologia | 20.664 | `historico_nao_validado` |
+| fornecedores de tecnologia distintos | 4.246 | `historico_nao_validado` |
+| relações recorrentes (`contratações distintas >= 2`) | 828 | `historico_nao_validado` |
+| contratos ligados a itens tecnológicos | 1.537 | `historico_nao_validado` |
+| eventos desses contratos | 1.755 | `historico_nao_validado` |
 | variação e totais monetários | — | `desabilitada` por semântica insuficiente |
 
-As contagens foram recalculadas em 18 de julho de 2026 diretamente dos arquivos
-oficiais da janela `2025-07-18` a `2026-07-17`; a evidência está em
-`evidence/data/corrected-kpis.json`. As tabelas Delta antigas não foram
-rematerializadas após a correção porque os créditos do workspace terminaram.
-Logo, esses números são a baseline corrigida reproduzível, não uma alegação de
-que o snapshot Delta anterior foi atualizado.
+Essas contagens vieram de uma auditoria que reimplementava regras da Gold e cujo
+JSON não está no pacote. Permanecem apenas para rastreabilidade histórica; não são
+baseline publicável. A nova auditoria compartilhada precisa ser executada sobre os
+snapshots e as Gold continuam sem rematerialização.

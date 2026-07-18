@@ -1,4 +1,4 @@
-"""Recalcula KPIs de portfólio diretamente dos snapshots anuais."""
+"""Reproduz os KPIs de compras com as mesmas transformações da Silver/Gold."""
 
 from __future__ import annotations
 
@@ -6,22 +6,21 @@ import argparse
 import json
 from pathlib import Path
 
-from pyspark import StorageLevel
 from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.functions import (
-    col,
-    countDistinct,
-    lower,
-    regexp_replace,
-    to_date,
-    to_timestamp,
-    trim,
-    when,
-)
+from pyspark.sql.functions import lit, sha2, to_date, to_timestamp, trim
 
+from rastro_publico.evidencias import metadados_evidencia
+from rastro_publico.transformacoes.contratacoes import transformar_contratacoes
+from rastro_publico.transformacoes.gold import (
+    calcular_kpis_compras,
+    preparar_relacoes_gold,
+)
 from rastro_publico.transformacoes.nucleo import (
     classificar_equipamentos,
     classificar_servicos,
+    transformar_itens,
+    transformar_resultados,
+    transformar_vinculos_contratacao,
 )
 
 
@@ -32,9 +31,15 @@ def _files(root: Path, pattern: str) -> list[str]:
     return [file.resolve().as_uri() for file in files]
 
 
-def _read(spark: SparkSession, paths: list[str]) -> DataFrame:
+def _read(spark: SparkSession, paths: list[str], dataset: str) -> DataFrame:
     parts = [
-        spark.read.options(header=True, multiLine=True, escape='"').csv(path)
+        spark.read.options(header=True, multiLine=True, escape='"')
+        .csv(path)
+        .withColumn("_source_file_id", sha2(lit(path), 256))
+        .withColumn("_run_id", lit("auditoria-local"))
+        .withColumn("_sistema_origem", lit("comprasgov"))
+        .withColumn("_dataset_origem", lit(dataset))
+        .withColumn("_coletado_em_utc", lit("2026-07-18T00:00:00Z"))
         for path in paths
     ]
     result = parts[0]
@@ -43,11 +48,34 @@ def _read(spark: SparkSession, paths: list[str]) -> DataFrame:
     return result
 
 
-def _classify(items: DataFrame, description: str, item_type: str) -> DataFrame:
-    prepared = items.withColumn("descricao", trim(col(description))).withColumn(
-        "material_ou_servico", col(item_type)
+def preparar_silver_compras(
+    compras_raw: DataFrame,
+    itens_raw: DataFrame,
+    resultados_raw: DataFrame,
+    segredo: str = "auditoria-local-nao-producao",
+) -> tuple[DataFrame, DataFrame, DataFrame, DataFrame]:
+    contratacoes = transformar_contratacoes(compras_raw)[0]
+    itens = classificar_servicos(
+        classificar_equipamentos(transformar_itens(itens_raw)[0])
+    ).join(contratacoes.select("contratacao_id"), "contratacao_id", "inner")
+    resultados = transformar_resultados(resultados_raw, segredo)[0].join(
+        itens.select("item_id"), "item_id", "inner"
     )
-    return classificar_servicos(classificar_equipamentos(prepared))
+    vinculos = transformar_vinculos_contratacao(compras_raw).join(
+        contratacoes.select("contratacao_id"), "contratacao_id", "inner"
+    )
+    return itens, resultados, contratacoes, vinculos
+
+
+def auditar_compras_brutas(
+    compras_raw: DataFrame,
+    itens_raw: DataFrame,
+    resultados_raw: DataFrame,
+    segredo: str = "auditoria-local-nao-producao",
+) -> DataFrame:
+    return calcular_kpis_compras(
+        *preparar_silver_compras(compras_raw, itens_raw, resultados_raw, segredo)
+    )
 
 
 def main() -> None:
@@ -64,143 +92,64 @@ def main() -> None:
         .config("spark.sql.shuffle.partitions", "24")
         .getOrCreate()
     )
-    spark.sparkContext.setLogLevel("WARN")
-
-    purchases = _read(spark, _files(args.root, "*VW_FT_PNCP_COMPRA-*.csv")).where(
+    compras_raw = _read(
+        spark, _files(args.root, "*VW_FT_PNCP_COMPRA-*.csv"), "VW_FT_PNCP_COMPRA"
+    ).where(
         to_date(to_timestamp("data_publicacao_pncp")).between(
             args.data_inicio, args.data_fim
         )
     )
-    purchase_population = purchases.select(
-        trim("numero_controle_PNCP").alias("contratacao_id"),
-        trim("orgao_entidade_cnpj").alias("orgao_id"),
-    ).where("contratacao_id IS NOT NULL")
+    chaves = compras_raw.select(
+        trim("numero_controle_PNCP").alias("numero_controle_pncp")
+    ).where("numero_controle_pncp IS NOT NULL").distinct()
 
-    purchase_items = _read(
-        spark, _files(args.root, "*VW_FT_PNCP_COMPRA_ITEM-*.csv")
+    itens_raw = (
+        _read(
+            spark,
+            _files(args.root, "*VW_FT_PNCP_COMPRA_ITEM-*.csv"),
+            "VW_FT_PNCP_COMPRA_ITEM",
+        )
+        .withColumn(
+            "numero_controle_pncp", trim("numero_controle_PNCP_compra")
+        )
+        .join(chaves, "numero_controle_pncp", "left_semi")
+        .drop("numero_controle_pncp")
     )
-    technology_items = (
-        _classify(
-            purchase_items,
-            "descricao_resumida",
-            "material_ou_servico",
+    resultados_raw = (
+        _read(
+            spark,
+            _files(args.root, "*VW_DM_PNCP_ITEM_RESULTADO-*.csv"),
+            "VW_DM_PNCP_ITEM_RESULTADO",
         )
-        .select(
-            trim("numero_controle_PNCP_compra").alias("contratacao_id"),
-            trim("id_compra_item").alias("item_id"),
-            "categoria_tecnologia",
+        .withColumn(
+            "numero_controle_pncp", trim("numero_controle_PNCP_compra")
         )
-        .where("categoria_tecnologia <> 'incerto'")
-        .join(purchase_population, "contratacao_id", "left_semi")
-        .dropDuplicates(["item_id", "categoria_tecnologia"])
-        .persist(StorageLevel.DISK_ONLY)
-    )
-
-    results = _read(
-        spark, _files(args.root, "*VW_DM_PNCP_ITEM_RESULTADO-*.csv")
-    ).select(
-        trim("id_compra_item").alias("item_id"),
-        trim("numero_controle_PNCP_compra").alias("contratacao_id"),
-        trim("ni_fornecedor").alias("fornecedor_id"),
-    )
-    technology_results = (
-        results.join(
-            technology_items.select("item_id", "categoria_tecnologia"),
-            "item_id",
-            "inner",
-        )
-        .join(purchase_population, "contratacao_id", "inner")
-        .where("fornecedor_id IS NOT NULL AND fornecedor_id <> ''")
-        .dropDuplicates(
-            ["contratacao_id", "item_id", "fornecedor_id", "categoria_tecnologia"]
-        )
-        .persist(StorageLevel.DISK_ONLY)
-    )
-    recurrence = (
-        technology_results.select(
-            "contratacao_id", "orgao_id", "fornecedor_id", "categoria_tecnologia"
-        )
-        .distinct()
-        .groupBy("orgao_id", "fornecedor_id", "categoria_tecnologia")
-        .agg(countDistinct("contratacao_id").alias("contratacoes_distintas"))
-        .where("contratacoes_distintas >= 2")
+        .join(chaves, "numero_controle_pncp", "left_semi")
+        .drop("numero_controle_pncp")
     )
 
-    contracts = _read(
-        spark, _files(args.root, "*contratos-anual-contratos-*.csv")
-    ).where(
-        to_date(to_timestamp("data_publicacao")).between(
-            args.data_inicio, args.data_fim
-        )
+    itens, resultados, contratacoes, vinculos = preparar_silver_compras(
+        compras_raw, itens_raw, resultados_raw
     )
-    contract_population = contracts.select(
-        trim("id").alias("contrato_id"),
-        trim("fonecedor_cnpj_cpf_idgener").alias("fornecedor_id"),
-    ).where("contrato_id IS NOT NULL")
-    contract_items = _read(
-        spark, _files(args.root, "*contratos-anual-itens-*.csv")
-    )
-    contract_items = contract_items.withColumn(
-        "tipo_normalizado",
-        when(lower(col("tipo_id")).contains("serv"), "S")
-        .when(lower(col("tipo_id")).contains("material"), "M")
-    )
-    # O arquivo anual usa descrições textuais ou códigos; a regra conservadora
-    # só promove serviço quando o campo o identifica explicitamente.
-    technology_contract_ids = (
-        _classify(
-            contract_items,
-            "descricao_complementar",
-            "tipo_normalizado",
-        )
-        .where("categoria_tecnologia <> 'incerto'")
-        .select(trim("contrato_id").alias("contrato_id"))
-        .join(contract_population.select("contrato_id"), "contrato_id", "left_semi")
-        .distinct()
-        .persist(StorageLevel.DISK_ONLY)
-    )
-    technology_contracts = contract_population.join(
-        technology_contract_ids, "contrato_id", "inner"
-    )
-    histories = _read(
-        spark, _files(args.root, "*contratos-anual-historicos-*.csv")
-    ).select(
-        trim("id").alias("evento_id"), trim("contrato_id").alias("contrato_id")
-    )
-    technology_events = histories.join(
-        technology_contract_ids, "contrato_id", "inner"
-    )
-    purchase_suppliers = technology_results.select(
-        regexp_replace("fornecedor_id", r"\D", "").alias("fornecedor_id")
-    ).where("fornecedor_id <> ''")
-    contract_suppliers = technology_contracts.select(
-        regexp_replace("fornecedor_id", r"\D", "").alias("fornecedor_id")
-    ).where("fornecedor_id <> ''")
-
-    categories = {
+    kpis = calcular_kpis_compras(
+        itens, resultados, contratacoes, vinculos
+    ).first()
+    categorias = {
         row["categoria_tecnologia"]: row["count"]
-        for row in technology_items.groupBy("categoria_tecnologia").count().collect()
+        for row in preparar_relacoes_gold(
+            itens, resultados, contratacoes, vinculos
+        )
+        .select("item_id", "categoria_tecnologia")
+        .distinct()
+        .groupBy("categoria_tecnologia")
+        .count()
+        .collect()
     }
     output = {
+        "_meta": metadados_evidencia("audit_corrected_kpis", "VALIDADA"),
         "janela": {"inicio": args.data_inicio, "fim": args.data_fim},
-        "compras_tecnologia": technology_items.select("contratacao_id").distinct().count(),
-        "itens_tecnologia": technology_items.select("item_id").distinct().count(),
-        "resultados_tecnologia": technology_results.count(),
-        "fornecedores_compras_tecnologia": technology_results.select(
-            "fornecedor_id"
-        ).distinct().count(),
-        "relacoes_recorrentes": recurrence.count(),
-        "contratos_tecnologia": technology_contracts.select("contrato_id").distinct().count(),
-        "fornecedores_contratos_tecnologia": technology_contracts.where(
-            "fornecedor_id IS NOT NULL AND fornecedor_id <> ''"
-        ).select("fornecedor_id").distinct().count(),
-        "fornecedores_tecnologia_distintos": purchase_suppliers.unionByName(
-            contract_suppliers
-        ).distinct().count(),
-        "eventos_contratos_tecnologia": technology_events.select(
-            "evento_id"
-        ).distinct().count(),
-        "itens_por_categoria": dict(sorted(categories.items())),
+        **kpis.asDict(),
+        "itens_por_categoria": dict(sorted(categorias.items())),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

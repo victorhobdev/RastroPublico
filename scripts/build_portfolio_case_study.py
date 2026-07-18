@@ -1,7 +1,30 @@
 from __future__ import annotations
 
-import json
+# ruff: noqa: E402
 from pathlib import Path
+
+from rastro_publico.evidencias import carregar_evidencia_validada
+
+ROOT = Path(__file__).parents[1]
+
+
+def carregar_evidencias_case_study() -> tuple[dict, dict]:
+    return (
+        carregar_evidencia_validada(
+            ROOT / "evidence/data/corrected-kpis.json",
+            "audit_corrected_kpis",
+            "VALIDADA",
+        ),
+        carregar_evidencia_validada(
+            ROOT / "evidence/data/value-semantics-summary.json",
+            "audit_value_semantics",
+            "NAO_PUBLICAVEL",
+        ),
+    )
+
+
+if __name__ == "__main__":
+    carregar_evidencias_case_study()
 
 from docx import Document
 from docx.enum.section import WD_SECTION
@@ -12,8 +35,6 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 from PIL import Image, ImageDraw, ImageFont
 
-
-ROOT = Path(__file__).parents[1]
 OUT = ROOT / "deliverables"
 ASSETS = OUT / "assets"
 NAVY = "102A43"
@@ -259,7 +280,10 @@ def add_footer(section):
 def build() -> Path:
     OUT.mkdir(exist_ok=True)
     ASSETS.mkdir(exist_ok=True)
-    kpis = json.loads((ROOT / "evidence/data/corrected-kpis.json").read_text(encoding="utf-8"))
+    kpis, _ = carregar_evidencias_case_study()
+
+    def numero(chave):
+        return f"{kpis[chave]:,}".replace(",", ".")
     make_category_chart(kpis["itens_por_categoria"], ASSETS / "categorias.png")
     make_architecture(ASSETS / "arquitetura.png")
     make_benchmark(ASSETS / "benchmark.png")
@@ -274,7 +298,7 @@ def build() -> Path:
     add_text(doc, "Compras públicas de tecnologia, com conclusões limitadas pela qualidade real dos dados.", size=16, color=BLUE, after=24)
     add_callout(doc, "O problema", "Transformar milhões de registros oficiais, versões e vínculos imperfeitos em uma base auditável para explorar quem compra de quem, recorrência e evolução contratual — sem classificar fraude ou irregularidade.")
     add_text(doc, "RECORTE AUDITADO", size=9.5, color=MUTED, bold=True, before=15, after=7)
-    add_kpi_strip(doc, [("12.252", "compras de tecnologia"), ("29.207", "itens tecnológicos"), ("4.246", "fornecedores distintos"), ("1.537", "contratos vinculados")])
+    add_kpi_strip(doc, [(numero("compras_tecnologia"), "compras de tecnologia"), (numero("itens_tecnologia"), "itens tecnológicos"), (numero("fornecedores_compras_tecnologia"), "fornecedores distintos"), ("pendente", "contratos não recalculados")])
     add_heading(doc, "Decisões que definem o produto", 2)
     add_bullet(doc, "Spark processa arquivos conjuntos, joins, janelas, deduplicação e agregações; Python comum cuida de HTTP.")
     add_bullet(doc, "Landing é imutável; staging é um snapshot Delta reconstruível. A distinção é explícita.")
@@ -290,7 +314,7 @@ def build() -> Path:
     add_text(doc, "A coleta, o registro de artefatos e silver.contratacoes usam controle incremental e MERGE. O núcleo Silver e as Gold atuais são reconstruções integrais idempotentes da janela. O projeto não chama overwrite de processamento incremental.")
     add_callout(doc, "Reprocessamento", "Datas, modo e run_id são parâmetros. Watermark só avança após materialização e qualidade; falha preserva as tarefas verdes e permite reparar o trecho afetado.", BLUE)
     add_heading(doc, "Contratos técnicos relevantes", 2)
-    add_bullet(doc, "MERGE atômico com uma linha de origem por chave evita ambiguidade e corrida de append.")
+    add_bullet(doc, "A carga Bronze por arquivo depende do Job serializado; execução manual concorrente não é suportada.")
     add_bullet(doc, "Hash lógico versionado usa campos ordenados, struct → JSON → SHA-256, exclui metadados técnicos e a privacidade usa whitelist de pessoa jurídica.")
 
     page_break(doc)
@@ -299,13 +323,13 @@ def build() -> Path:
     doc.add_picture(str(ASSETS / "categorias.png"), width=Inches(6.5))
     add_callout(doc, "Leitura permitida", "Licenciamento é a maior categoria classificada na janela. Isso descreve frequência de itens publicados; não mede gasto, risco ou irregularidade.")
     add_heading(doc, "Três resultados defendíveis", 2)
-    add_kpi_strip(doc, [("828", "relações recorrentes"), ("20.664", "resultados tecnológicos"), ("1.755", "eventos contratuais")])
+    add_kpi_strip(doc, [(numero("relacoes_recorrentes"), "relações recorrentes"), (numero("resultados_tecnologia"), "resultados tecnológicos"), ("pendente", "eventos não recalculados")])
     add_text(doc, "Contratos e eventos entram apenas quando ligados a itens tecnológicos. O vínculo contratação–contrato é parcial (cenário C3), então ausência de ligação não significa ausência de contrato.", size=9.7, color=MUTED, italic=True, before=8)
 
     page_break(doc)
     add_heading(doc, "3. A correção mais importante foi não publicar", 1)
     add_text(doc, "A primeira execução produziu totais financeiramente implausíveis. Em vez de criar um corte arbitrário, a auditoria mediu a distribuição e bloqueou toda conclusão monetária.")
-    add_kpi_strip(doc, [("R$ 174,7 tri", "soma bruta nacional"), ("31", "itens acima de R$ 1 tri"), ("R$ 4,23 tri", "maior item tecnológico")])
+    add_kpi_strip(doc, [("não publicável", "total homologado"), ("não publicável", "Top 1 / Top 3"), ("não publicável", "HHI monetário")])
     add_heading(doc, "Por que o número não virou informação", 2)
     add_bullet(doc, "A fonte mistura semânticas de valor estimado, item, lote e quantidade sem atributos suficientes para resolver todos os casos.")
     add_bullet(doc, "Equivalência entre duas consultas confirma que ambas somam o mesmo dado; não confirma que o campo significa o que se deseja publicar.")
@@ -330,7 +354,7 @@ def build() -> Path:
         ("KPIs corrigidos", "evidence/data/corrected-kpis.json", "Recalcula população tecnológica e recorrência"),
         ("Semântica monetária", "evidence/data/value-semantics-summary.json", "Explica por que valores não são publicados"),
         ("Jobs e benchmark", "databricks.yml + evidence/databricks/", "Parâmetros, run e métricas sanitizadas"),
-        ("Contratos executáveis", "tests/", "113 testes · 82,97% de cobertura"),
+        ("Contratos executáveis", "tests/", "suíte e cobertura mínima de 80%"),
         ("Ambiente limpo", ".github/workflows/ci.yml", "uv.lock, lint, suíte e cobertura mínima"),
     ]
     for evidence, location, proof in rows:

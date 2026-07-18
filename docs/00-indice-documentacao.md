@@ -17,9 +17,9 @@ corrigido.
 
 ## Evidências verificáveis
 
-- `evidence/data/corrected-kpis.json` — contagens do recorte tecnológico;
-- `evidence/data/value-semantics-summary.json` — auditoria que bloqueou totais
-  monetários;
+- `scripts/audit_corrected_kpis.py` — recálculo pela mesma lógica da Gold;
+- `scripts/audit_value_semantics.py` — gate do valor homologado; os JSONs de
+  saída precisam ser recriados externamente;
 - `evidence/databricks/` — definições sanitizadas de jobs, dashboard, execução e
   Query History;
 - `.github/workflows/ci.yml` — lint, testes e cobertura em ambiente limpo;

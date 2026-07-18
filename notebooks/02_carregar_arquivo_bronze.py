@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 from delta.tables import DeltaTable
-from pyspark.sql.functions import col, countDistinct, lit, sum as spark_sum
 from pyspark.sql.types import LongType, StringType, StructField, StructType
 
 
@@ -21,8 +20,11 @@ if not arquivo or not manifesto or not source_root:
 sys.path.insert(0, source_root)
 
 from rastro_publico.coleta.arquivo_bronze import (
+    SCHEMA_INGESTION_ARTIFACTS,
     arquivo_ja_carregado,
+    migrar_total_linhas_ingestao,
     preparar_csv_bronze,
+    resumir_run_artefatos,
     tabela_bronze,
 )
 from rastro_publico.coleta.persistencia import append_delta_idempotente
@@ -59,6 +61,8 @@ else:
     entrada.write.format("delta").mode("append").saveAsTable(tabela_dados)
     linhas_inseridas = linhas_entrada
 
+migrar_total_linhas_ingestao(spark)
+
 schema_arquivos = StructType(
     [
         StructField("source_file_id", StringType(), False),
@@ -84,16 +88,6 @@ schema_runs = StructType(
         StructField("total_linhas", LongType(), False),
     ]
 )
-schema_artefatos = StructType(
-    [
-        StructField("artifact_id", StringType(), False),
-        StructField("run_id", StringType(), False),
-        StructField("source_file_id", StringType(), False),
-        StructField("status", StringType(), False),
-        StructField("tamanho_bytes", LongType(), False),
-        StructField("hash_arquivo", StringType(), False),
-    ]
-)
 arquivo_fonte = {
     "source_file_id": source_file_id,
     "run_id": documento["run_id"],
@@ -106,6 +100,7 @@ arquivo_fonte = {
     "data_publicacao_arquivo": documento["data_publicacao_arquivo"],
     "tamanho_bytes": documento["tamanho_bytes"],
     "hash_arquivo": source_file_id,
+    "total_linhas": linhas_entrada,
 }
 arquivos_inseridos = append_delta_idempotente(
     spark,
@@ -129,22 +124,15 @@ artefatos_inseridos = append_delta_idempotente(
             "total_linhas": linhas_entrada,
         }
     ],
-    schema_artefatos,
+    SCHEMA_INGESTION_ARTIFACTS,
     "workspace.ops.ingestion_artifacts",
     "artifact_id",
 )
 
-resumo_run = (
-    spark.table("workspace.ops.ingestion_artifacts")
-    .where(col("run_id") == documento["run_id"])
-    .agg(
-        countDistinct("source_file_id").alias("total_artefatos"),
-        spark_sum("total_linhas").cast("long").alias("total_linhas"),
-    )
-    .withColumn("run_id", lit(documento["run_id"]))
-    .withColumn("criado_em_utc", lit(documento["coletado_em_utc"]))
-    .withColumn("status", lit("SUCESSO"))
-    .select(*[campo.name for campo in schema_runs])
+resumo_run = resumir_run_artefatos(
+    spark.table("workspace.ops.ingestion_artifacts"),
+    documento["run_id"],
+    documento["coletado_em_utc"],
 )
 tabela_runs = "workspace.ops.ingestion_runs_arquivo"
 if spark.catalog.tableExists(tabela_runs):

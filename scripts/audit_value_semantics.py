@@ -1,4 +1,4 @@
-"""Audita a semântica dos valores de itens em uma janela de compras."""
+"""Audita a semântica de valor homologado usada pela Gold."""
 
 from __future__ import annotations
 
@@ -6,14 +6,15 @@ import argparse
 import json
 from pathlib import Path
 
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import (
-    abs as spark_abs,
     col,
     count,
+    countDistinct,
     lit,
     max as spark_max,
     percentile_approx,
+    sha2,
     sum as spark_sum,
     to_date,
     to_timestamp,
@@ -21,26 +22,30 @@ from pyspark.sql.functions import (
     when,
 )
 
+from rastro_publico.evidencias import metadados_evidencia
+from rastro_publico.transformacoes.gold import avaliar_elegibilidade_monetaria
 from rastro_publico.transformacoes.nucleo import (
     classificar_equipamentos,
     classificar_servicos,
+    transformar_itens,
+    transformar_resultados,
 )
 
 
 def _arquivos(padrao: str) -> list[str]:
-    caminhos = sorted(Path().glob(padrao)) if not Path(padrao).is_absolute() else []
-    if not caminhos:
-        caminho = Path(padrao)
-        caminhos = sorted(caminho.parent.glob(caminho.name))
+    caminho = Path(padrao)
+    caminhos = sorted(caminho.parent.glob(caminho.name))
     if not caminhos:
         raise FileNotFoundError(padrao)
-    return [caminho.resolve().as_uri() for caminho in caminhos]
+    return [item.resolve().as_uri() for item in caminhos]
 
 
-def _ler_por_arquivo(spark: SparkSession, caminhos: list[str]):
-    """Replica a união nominal usada na preparação anual."""
+def _ler(spark: SparkSession, caminhos: list[str], dataset: str) -> DataFrame:
     partes = [
-        spark.read.options(header=True, multiLine=True, escape='"').csv(caminho)
+        spark.read.options(header=True, multiLine=True, escape='"')
+        .csv(caminho)
+        .withColumn("_source_file_id", sha2(lit(caminho), 256))
+        .withColumn("_dataset_origem", lit(dataset))
         for caminho in caminhos
     ]
     resultado = partes[0]
@@ -51,8 +56,9 @@ def _ler_por_arquivo(spark: SparkSession, caminhos: list[str]):
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--compras", required=True, help="glob dos CSVs de compras")
-    parser.add_argument("--itens", required=True, help="glob dos CSVs de itens")
+    parser.add_argument("--compras", required=True)
+    parser.add_argument("--itens", required=True)
+    parser.add_argument("--resultados", required=True)
     parser.add_argument("--data-inicio", required=True)
     parser.add_argument("--data-fim", required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -60,14 +66,11 @@ def main() -> None:
 
     spark = (
         SparkSession.builder.master("local[4]")
-        .appName("rastro-publico-auditoria-valores")
+        .appName("rastro-publico-auditoria-valores-homologados")
         .config("spark.sql.shuffle.partitions", "16")
         .getOrCreate()
     )
-    spark.sparkContext.setLogLevel("WARN")
-    compras = _ler_por_arquivo(spark, _arquivos(args.compras))
-    itens = _ler_por_arquivo(spark, _arquivos(args.itens))
-
+    compras = _ler(spark, _arquivos(args.compras), "VW_FT_PNCP_COMPRA")
     chaves = (
         compras.where(
             to_date(to_timestamp("data_publicacao_pncp")).between(
@@ -78,86 +81,94 @@ def main() -> None:
         .where("numero_controle_pncp IS NOT NULL")
         .distinct()
     )
-    base = (
-        itens.withColumn(
+    itens_raw = (
+        _ler(spark, _arquivos(args.itens), "VW_FT_PNCP_COMPRA_ITEM")
+        .withColumn(
             "numero_controle_pncp", trim("numero_controle_PNCP_compra")
         )
         .join(chaves, "numero_controle_pncp", "left_semi")
-        .select(
-            "id_compra_item",
-            "descricao_resumida",
-            "material_ou_servico",
-            "unidade_medida",
-            col("quantidade").cast("decimal(38,6)").alias("quantidade"),
-            col("valor_unitario_estimado")
-            .cast("decimal(38,4)")
-            .alias("valor_unitario"),
-            col("valor_total").cast("decimal(38,2)").alias("valor_total"),
+        .drop("numero_controle_pncp")
+    )
+    resultados_raw = (
+        _ler(
+            spark,
+            _arquivos(args.resultados),
+            "VW_DM_PNCP_ITEM_RESULTADO",
         )
-        .withColumn("valor_calculado", col("quantidade") * col("valor_unitario"))
         .withColumn(
-            "erro_relativo",
-            when(
-                col("valor_total") > 0,
-                spark_abs(col("valor_total") - col("valor_calculado"))
-                / col("valor_total"),
-            ),
+            "numero_controle_pncp", trim("numero_controle_PNCP_compra")
         )
+        .join(chaves, "numero_controle_pncp", "left_semi")
+        .drop("numero_controle_pncp")
     )
 
-    base = classificar_servicos(
-        classificar_equipamentos(
-            base.withColumn("descricao", col("descricao_resumida")).withColumn(
-                "material_ou_servico", col("material_ou_servico")
-            )
-        )
+    itens = classificar_servicos(classificar_equipamentos(transformar_itens(itens_raw)[0]))
+    itens_tecnologia = itens.where("categoria_tecnologia <> 'incerto'").select(
+        "item_id"
     )
+    resultados = transformar_resultados(
+        resultados_raw, "auditoria-local-nao-producao"
+    )[0].join(itens_tecnologia, "item_id", "inner")
+    avaliados = avaliar_elegibilidade_monetaria(resultados)
 
-    def resumir(populacao):
-        return populacao.agg(
-            count("*").alias("itens"),
-            spark_sum("valor_total").alias("soma_valor_total"),
-            spark_max("valor_total").alias("maximo_valor_total"),
-            percentile_approx(
-                "valor_total", [0.5, 0.9, 0.99, 0.999], 10000
-            ).alias("percentis_valor_total"),
-            spark_sum(
-                when(col("valor_total") > lit(1_000_000_000), 1).otherwise(0)
-            ).alias("itens_acima_1_bilhao"),
-            spark_sum(
-                when(col("valor_total") > lit(1_000_000_000_000), 1).otherwise(0)
-            ).alias("itens_acima_1_trilhao"),
-            spark_sum(
-                when(
-                    col("valor_total") <= lit(1_000_000_000), col("valor_total")
-                ).otherwise(0)
-            ).alias("soma_ate_1_bilhao"),
-            spark_sum(
-                when(col("erro_relativo") > lit(0.01), 1).otherwise(0)
-            ).alias("divergencias_quantidade_vezes_unitario"),
-        ).first()
-
-    resumo = resumir(base)
-    tecnologia = base.where("categoria_tecnologia <> 'incerto'")
-    resumo_tecnologia = resumir(tecnologia)
+    resumo = avaliados.agg(
+        count("*").alias("linhas_resultado"),
+        countDistinct("resultado_id").alias("resultados_distintos"),
+        spark_sum(when(col("cancelado"), 1).otherwise(0)).alias("cancelados"),
+        spark_sum(
+            when(col("valor_total_homologado").isNull(), 1).otherwise(0)
+        ).alias("totais_nulos"),
+        spark_sum(
+            when(col("valor_total_homologado") < 0, 1).otherwise(0)
+        ).alias("totais_negativos"),
+        spark_sum(when(~col("elegivel_monetario"), 1).otherwise(0)).alias(
+            "inelegiveis_monetarios"
+        ),
+        spark_sum(
+            when(col("valor_total_homologado") > lit(1_000_000_000), 1).otherwise(0)
+        ).alias("resultados_acima_1_bilhao"),
+        spark_max("valor_total_homologado").alias("maximo_valor_total_homologado"),
+        percentile_approx(
+            "valor_total_homologado", [0.5, 0.9, 0.99, 0.999], 10000
+        ).alias("percentis_valor_total_homologado"),
+    ).first()
+    motivos = {
+        row["motivo_inelegibilidade_monetaria"]: row["count"]
+        for row in avaliados.where("NOT elegivel_monetario")
+        .groupBy("motivo_inelegibilidade_monetaria")
+        .count()
+        .collect()
+    }
     maiores = [
         row.asDict(recursive=True)
-        for row in base.orderBy(col("valor_total").desc_nulls_last()).limit(20).collect()
+        for row in avaliados.select(
+            "resultado_id",
+            "item_id",
+            "quantidade_homologada",
+            "valor_unitario_homologado",
+            "valor_total_homologado",
+            "cancelado",
+            "elegivel_monetario",
+            "motivo_inelegibilidade_monetaria",
+        )
+        .orderBy(col("valor_total_homologado").desc_nulls_last())
+        .limit(20)
+        .collect()
     ]
     saida = {
+        "_meta": metadados_evidencia(
+            "audit_value_semantics", "NAO_PUBLICAVEL"
+        ),
         "janela": {"inicio": args.data_inicio, "fim": args.data_fim},
-        "resumo": resumo.asDict(recursive=True),
-        "resumo_tecnologia": resumo_tecnologia.asDict(recursive=True),
-        "maiores_itens": maiores,
+        "campo_auditado": "valor_total_homologado",
+        "resumo_tecnologia": resumo.asDict(recursive=True),
+        "motivos_inelegibilidade": dict(sorted(motivos.items())),
+        "maiores_resultados": maiores,
+        "publicabilidade_monetaria": "nao_publicavel_ate_validacao_da_fonte",
     }
-    assert saida["resumo"]["itens"] > 0
-    assert all(
-        maiores[indice]["valor_total"] >= maiores[indice + 1]["valor_total"]
-        for indice in range(len(maiores) - 1)
-    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
-        json.dumps(saida, ensure_ascii=False, indent=2, default=str),
+        json.dumps(saida, ensure_ascii=False, indent=2, default=str) + "\n",
         encoding="utf-8",
     )
     print(args.output)

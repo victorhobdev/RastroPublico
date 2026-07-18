@@ -1,8 +1,11 @@
 import pytest
 
 from rastro_publico.coleta.arquivo_bronze import (
+    SCHEMA_INGESTION_ARTIFACTS,
     arquivo_ja_carregado,
+    garantir_coluna_total_linhas,
     preparar_csv_bronze,
+    resumir_run_artefatos,
     tabela_bronze,
 )
 
@@ -61,3 +64,69 @@ def test_mapeia_somente_datasets_bronze_aprovados() -> None:
 
     with pytest.raises(ValueError, match="dataset nao suportado"):
         tabela_bronze("tabela_injetada")
+
+
+def test_schema_e_resumo_preservam_contagem_de_cada_artefato(spark) -> None:
+    assert "total_linhas" in SCHEMA_INGESTION_ARTIFACTS.fieldNames()
+    artefatos = spark.createDataFrame(
+        [
+            ("a1", "run-1", "f1", "SUCESSO", 10, "f1", 2),
+            ("a2", "run-1", "f2", "SUCESSO", 20, "f2", 3),
+            ("a3", "run-2", "f3", "SUCESSO", 30, "f3", 7),
+        ],
+        SCHEMA_INGESTION_ARTIFACTS,
+    )
+
+    resumo = resumir_run_artefatos(artefatos, "run-1", "2026-07-18").first()
+
+    assert resumo.total_artefatos == 2
+    assert resumo.total_linhas == 5
+
+
+def test_resumo_ignora_reexecucao_do_mesmo_artefato(spark) -> None:
+    artefatos = spark.createDataFrame(
+        [
+            ("a1", "run-1", "f1", "SUCESSO", 10, "f1", 2),
+            ("a1", "run-1", "f1", "SUCESSO", 10, "f1", 2),
+        ],
+        SCHEMA_INGESTION_ARTIFACTS,
+    )
+
+    resumo = resumir_run_artefatos(artefatos, "run-1", "2026-07-18").first()
+
+    assert resumo.total_artefatos == 1
+    assert resumo.total_linhas == 2
+
+
+def test_migracao_de_schema_e_idempotente(monkeypatch) -> None:
+    class Tabela:
+        columns = ["artifact_id"]
+
+    class Catalogo:
+        @staticmethod
+        def tableExists(_tabela):
+            return True
+
+    class Spark:
+        catalog = Catalogo()
+
+        @staticmethod
+        def table(_tabela):
+            return Tabela()
+
+        @staticmethod
+        def sql(comando):
+            comandos.append(comando)
+            Tabela.columns.append("total_linhas")
+
+    comandos = []
+    monkeypatch.setattr(Tabela, "columns", ["artifact_id"])
+
+    assert garantir_coluna_total_linhas(Spark(), "workspace.ops.ingestion_artifacts")
+    assert not garantir_coluna_total_linhas(
+        Spark(), "workspace.ops.ingestion_artifacts"
+    )
+    assert comandos == [
+        "ALTER TABLE workspace.ops.ingestion_artifacts "
+        "ADD COLUMNS (total_linhas BIGINT)"
+    ]

@@ -17,6 +17,21 @@ variables:
 
 resources:
   jobs:
+    ingestao_arquivo_bronze:
+      name: RastroPublico - ingestao serial de arquivo
+      # A idempotencia do check + append abaixo depende desta serializacao.
+      max_concurrent_runs: 1
+      queue:
+        enabled: true
+      tasks:
+        - task_key: carregar_arquivo
+          notebook_task:
+            notebook_path: ./notebooks/02_carregar_arquivo_bronze.py
+            base_parameters:
+              arquivo: ""
+              manifesto: ""
+              source_root: ${workspace.file_path}/src
+
     pipeline_anual:
       name: RastroPublico - pipeline anual
       max_concurrent_runs: 1
@@ -73,6 +88,7 @@ resources:
               minimo_fornecedores: "2"
               minimo_resultados: "3"
               cobertura_minima: "0.8"
+              semantica_fonte_validada: "false"
         - task_key: gold_contexto
           depends_on:
             - task_key: gold_base

@@ -40,8 +40,17 @@ Recálculo PySpark da baseline corrigida, sem depender do workspace:
 R:\.venv\Scripts\python.exe scripts\audit_corrected_kpis.py `
   --root D:\RastroPublico\data\block11\anual\2025-2026 `
   --data-inicio 2025-07-18 --data-fim 2026-07-17 `
-  --output D:\RastroPublico\artifacts\corrected-kpis-20260718.json
+  --output evidence\data\corrected-kpis.json
 ```
+
+O case study só aceita evidências v2 geradas pelos scripts atuais. Também execute
+`audit_value_semantics.py` com `--compras`, `--itens`, `--resultados`, janela e
+`--output evidence\data\value-semantics-summary.json`; JSON antigo ou sem
+metadados é recusado.
+
+Na primeira carga após esta revisão, `02_carregar_arquivo_bronze.py` adiciona
+`total_linhas` às tabelas Delta antigas quando necessário e recompõe os valores a
+partir das Bronze por `source_file_id`. A operação é idempotente.
 
 ## 2. Parâmetros da execução de referência
 

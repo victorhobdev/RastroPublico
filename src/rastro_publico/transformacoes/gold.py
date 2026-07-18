@@ -1,5 +1,6 @@
 from pyspark.sql import DataFrame, Window
 from pyspark.sql.functions import (
+    abs as spark_abs,
     col,
     coalesce,
     count,
@@ -19,6 +20,53 @@ from pyspark.sql.functions import (
     to_timestamp,
     when,
 )
+
+
+def avaliar_elegibilidade_monetaria(resultados: DataFrame) -> DataFrame:
+    obrigatorias = {
+        "resultado_id",
+        "quantidade_homologada",
+        "valor_unitario_homologado",
+        "valor_total_homologado",
+    }
+    ausentes = obrigatorias.difference(resultados.columns)
+    if ausentes:
+        raise ValueError(f"colunas monetarias ausentes: {', '.join(sorted(ausentes))}")
+
+    ocorrencias = Window.partitionBy("resultado_id")
+    calculado = col("quantidade_homologada") * col("valor_unitario_homologado")
+    tolerancia = greatest(lit(0.01), spark_abs(col("valor_total_homologado")) * 0.01)
+    return (
+        resultados.withColumn("_ocorrencias_resultado", count("*").over(ocorrencias))
+        .withColumn(
+            "motivo_inelegibilidade_monetaria",
+            when(col("_ocorrencias_resultado") > 1, "resultado_duplicado")
+            .when(
+                col("quantidade_homologada").isNull()
+                | (col("quantidade_homologada") <= 0),
+                "quantidade_homologada_invalida",
+            )
+            .when(
+                col("valor_unitario_homologado").isNull()
+                | (col("valor_unitario_homologado") <= 0),
+                "valor_unitario_homologado_invalido",
+            )
+            .when(
+                col("valor_total_homologado").isNull()
+                | (col("valor_total_homologado") <= 0),
+                "valor_total_homologado_invalido",
+            )
+            .when(
+                spark_abs(col("valor_total_homologado") - calculado) > tolerancia,
+                "total_diverge_quantidade_vezes_unitario",
+            ),
+        )
+        .withColumn(
+            "elegivel_monetario",
+            col("motivo_inelegibilidade_monetaria").isNull(),
+        )
+        .drop("_ocorrencias_resultado")
+    )
 
 
 def calcular_qualidade_cobertura(
@@ -174,6 +222,7 @@ def calcular_concentracao_fornecedores(
     minimo_fornecedores: int = 2,
     minimo_resultados: int = 3,
     cobertura_minima: float = 0.8,
+    semantica_fonte_validada: bool = False,
 ) -> DataFrame:
     dimensoes = [
         "periodo",
@@ -183,11 +232,12 @@ def calcular_concentracao_fornecedores(
         "modalidade",
     ]
     base = (
-        resultados.select(
+        avaliar_elegibilidade_monetaria(resultados).select(
             "resultado_id",
             "item_id",
             "fornecedor_id",
             "valor_total_homologado",
+            "elegivel_monetario",
             "cancelado",
         ).join(
             itens.select("item_id", "contratacao_id", "categoria_tecnologia"),
@@ -211,6 +261,9 @@ def calcular_concentracao_fornecedores(
     )
     denominadores = base.groupBy(*dimensoes).agg(
         countDistinct("resultado_id").alias("resultados_observados"),
+        countDistinct(
+            when(col("elegivel_monetario"), col("resultado_id"))
+        ).alias("resultados_semantica_elegivel"),
         spark_sum(
             when(
                 col("valor_total_homologado") > 0, col("valor_total_homologado")
@@ -218,7 +271,7 @@ def calcular_concentracao_fornecedores(
         ).alias("valor_observado"),
     )
     elegiveis = base.where(
-        col("fornecedor_id").isNotNull() & (col("valor_total_homologado") > 0)
+        col("fornecedor_id").isNotNull() & col("elegivel_monetario")
     )
     por_fornecedor = elegiveis.groupBy(*dimensoes, "fornecedor_id").agg(
         spark_sum("valor_total_homologado").alias("valor_fornecedor"),
@@ -251,7 +304,15 @@ def calcular_concentracao_fornecedores(
         spark_sum(col("participacao") * col("participacao")).alias("hhi"),
     )
     return (
-        concentracao.join(denominadores, dimensoes)
+        denominadores.join(concentracao, dimensoes, "left")
+        .withColumn(
+            "fornecedores_distintos",
+            coalesce(col("fornecedores_distintos"), lit(0).cast("long")),
+        )
+        .withColumn(
+            "resultados_elegiveis",
+            coalesce(col("resultados_elegiveis"), lit(0).cast("long")),
+        )
         .withColumn(
             "cobertura_valor",
             when(
@@ -260,8 +321,17 @@ def calcular_concentracao_fornecedores(
             ).otherwise(lit(0.0)),
         )
         .withColumn(
+            "cobertura_semantica_valor",
+            col("resultados_semantica_elegivel") / col("resultados_observados"),
+        )
+        .withColumn(
             "limitacao",
-            when(
+            when(~lit(semantica_fonte_validada), "semantica_fonte_nao_validada")
+            .when(
+                col("cobertura_semantica_valor") < 1,
+                "semantica_valor_inconsistente",
+            )
+            .when(
                 col("resultados_elegiveis") < minimo_resultados,
                 "resultados_insuficientes",
             )
@@ -277,6 +347,38 @@ def calcular_concentracao_fornecedores(
         .withColumn(
             "status_publicacao",
             when(col("limitacao").isNull(), "publicada").otherwise("nao_publicavel"),
+        )
+        .withColumn(
+            "gate_monetario",
+            when(col("status_publicacao") == "publicada", "aprovado").otherwise(
+                "reprovado"
+            ),
+        )
+        .withColumn(
+            "top_1",
+            when(col("gate_monetario") == "aprovado", col("top_1")),
+        )
+        .withColumn(
+            "top_3",
+            when(col("gate_monetario") == "aprovado", col("top_3")),
+        )
+        .withColumn(
+            "hhi", when(col("gate_monetario") == "aprovado", col("hhi"))
+        )
+        .withColumn(
+            "valor_total_homologado",
+            when(
+                col("gate_monetario") == "aprovado",
+                col("valor_total_homologado"),
+            ),
+        )
+        .withColumn(
+            "valor_observado",
+            when(col("gate_monetario") == "aprovado", col("valor_observado")),
+        )
+        .withColumn(
+            "cobertura_valor",
+            when(col("gate_monetario") == "aprovado", col("cobertura_valor")),
         )
     )
 
@@ -305,7 +407,7 @@ def calcular_cobertura_servicos(itens: DataFrame) -> DataFrame:
     )
 
 
-def _base_relacoes(
+def preparar_relacoes_gold(
     itens: DataFrame,
     resultados: DataFrame,
     contratacoes: DataFrame,
@@ -342,6 +444,7 @@ def _base_relacoes(
             & col("categoria_tecnologia").isNotNull()
             & (col("categoria_tecnologia") != "incerto")
         )
+        .dropDuplicates(["resultado_id"])
     )
 
 
@@ -352,7 +455,7 @@ def calcular_recorrencia_orgao_fornecedor(
     vinculos: DataFrame,
 ) -> DataFrame:
     return (
-        _base_relacoes(itens, resultados, contratacoes, vinculos)
+        preparar_relacoes_gold(itens, resultados, contratacoes, vinculos)
         .groupBy("orgao_id", "fornecedor_id", "categoria_tecnologia")
         .agg(
             countDistinct("contratacao_id").alias("contratacoes_distintas"),
@@ -360,11 +463,6 @@ def calcular_recorrencia_orgao_fornecedor(
             countDistinct("periodo").alias("periodos_distintos"),
             spark_min("data_publicacao").alias("primeira_ocorrencia"),
             spark_max("data_publicacao").alias("ultima_ocorrencia"),
-            spark_sum(
-                when(col("valor_total_homologado") > 0, col("valor_total_homologado"))
-                .otherwise(0)
-                .cast("decimal(38,2)")
-            ).alias("valor_total_homologado"),
         )
         .where(col("contratacoes_distintas") >= 2)
         .withColumn(
@@ -372,11 +470,31 @@ def calcular_recorrencia_orgao_fornecedor(
             datediff("ultima_ocorrencia", "primeira_ocorrencia"),
         )
         .withColumn("status_publicacao", lit("publicada"))
+        .withColumn("valor_total_homologado", lit(None).cast("decimal(38,2)"))
         .withColumn(
             "limitacao",
             lit("recorrencia_descritiva_nao_indica_irregularidade"),
         )
     )
+
+
+def calcular_kpis_compras(
+    itens: DataFrame,
+    resultados: DataFrame,
+    contratacoes: DataFrame,
+    vinculos: DataFrame,
+) -> DataFrame:
+    base = preparar_relacoes_gold(itens, resultados, contratacoes, vinculos)
+    populacao = base.agg(
+        countDistinct("contratacao_id").alias("compras_tecnologia"),
+        countDistinct("item_id").alias("itens_tecnologia"),
+        countDistinct("resultado_id").alias("resultados_tecnologia"),
+        countDistinct("fornecedor_id").alias("fornecedores_compras_tecnologia"),
+    )
+    recorrencia = calcular_recorrencia_orgao_fornecedor(
+        itens, resultados, contratacoes, vinculos
+    ).agg(count("*").alias("relacoes_recorrentes"))
+    return populacao.crossJoin(recorrencia)
 
 
 def calcular_presenca_fornecedores(
@@ -387,7 +505,7 @@ def calcular_presenca_fornecedores(
     unidades: DataFrame,
 ) -> DataFrame:
     return (
-        _base_relacoes(itens, resultados, contratacoes, vinculos)
+        preparar_relacoes_gold(itens, resultados, contratacoes, vinculos)
         .join(unidades.select("unidade_id", "uf", "municipio"), "unidade_id", "left")
         .groupBy("fornecedor_id", "categoria_tecnologia")
         .agg(
@@ -398,13 +516,9 @@ def calcular_presenca_fornecedores(
             countDistinct("modalidade_id").alias("modalidades_distintas"),
             countDistinct("periodo").alias("periodos_distintos"),
             countDistinct("contratacao_id").alias("contratacoes_distintas"),
-            spark_sum(
-                when(col("valor_total_homologado") > 0, col("valor_total_homologado"))
-                .otherwise(0)
-                .cast("decimal(38,2)")
-            ).alias("valor_total_homologado"),
         )
         .withColumn("status_publicacao", lit("publicada"))
+        .withColumn("valor_total_homologado", lit(None).cast("decimal(38,2)"))
         .withColumn("limitacao", lit("presenca_restrita_a_resultados_homologados"))
     )
 
@@ -416,20 +530,16 @@ def calcular_rede_orgao_fornecedor(
     vinculos: DataFrame,
 ) -> DataFrame:
     return (
-        _base_relacoes(itens, resultados, contratacoes, vinculos)
+        preparar_relacoes_gold(itens, resultados, contratacoes, vinculos)
         .groupBy("orgao_id", "fornecedor_id", "categoria_tecnologia")
         .agg(
             countDistinct("contratacao_id").alias("contratacoes_distintas"),
             countDistinct("resultado_id").alias("resultados_distintos"),
             countDistinct("periodo").alias("periodos_distintos"),
             countDistinct("modalidade_id").alias("modalidades_distintas"),
-            spark_sum(
-                when(col("valor_total_homologado") > 0, col("valor_total_homologado"))
-                .otherwise(0)
-                .cast("decimal(38,2)")
-            ).alias("valor_total_homologado"),
         )
         .withColumn("status_publicacao", lit("publicada"))
+        .withColumn("valor_total_homologado", lit(None).cast("decimal(38,2)"))
         .withColumn(
             "limitacao", lit("aresta_descritiva_nao_indica_irregularidade")
         )

@@ -5,20 +5,16 @@ tecnologia, relacionando órgãos, fornecedores, itens e contratos. Os indicador
 são descritivos: apontam concentração, recorrência e cobertura para investigação,
 sem classificar fraude ou irregularidade.
 
-[Abrir o case study auditado em PDF](deliverables/RastroPublico-case-study.pdf)
+[Abrir o case study histórico em PDF](deliverables/RastroPublico-case-study.pdf)
 
 ![Arquitetura do RastroPúblico](deliverables/assets/arquitetura.png)
 
 ## O que foi processado
 
-Na janela de 18/07/2025 a 17/07/2026, o recálculo PySpark auditado identificou:
-
-- 12.252 compras classificadas como tecnologia;
-- 29.207 itens tecnológicos distintos;
-- 20.664 resultados ligados a esses itens;
-- 4.246 fornecedores tecnológicos distintos;
-- 828 relações recorrentes, cada uma com ao menos duas contratações distintas;
-- 1.537 contratos e 1.755 eventos vinculados a itens tecnológicos.
+Os números publicados pela auditoria anterior foram retirados do README: o script
+usava uma implementação simplificada, diferente da Silver/Gold. A nova auditoria
+chama as mesmas transformações produtivas; seus totais só devem voltar após uma
+execução externa sobre os snapshots anuais.
 
 Os totais monetários e as comparações de preço não são publicados. A auditoria
 encontrou valores extremos sem atributos suficientes para resolver unidade, lote
@@ -36,7 +32,11 @@ fontes oficiais → landing imutável → staging Delta reconstruível
   deduplicação e agregações.
 - A coleta e `silver.contratacoes` possuem comportamento incremental. O núcleo
   Silver e as Gold atuais são reconstruções integrais idempotentes da janela.
-- Escritas concorrentes de ingestão usam `MERGE` Delta atômico.
+- A carga Bronze por arquivo usa `check → append` e só é idempotente quando
+  executada pelo Job serializado (`max_concurrent_runs: 1`); execução manual
+  concorrente não é suportada.
+- A primeira carga migra idempotentemente `total_linhas` nas tabelas Delta
+  históricas e recompõe as contagens a partir das Bronze existentes.
 - Qualidade é específica por indicador: ausência de unidade bloqueia preço, mas
   não remove automaticamente um registro válido para recorrência.
 - Identificadores só permanecem públicos para tipos reconhecidos de pessoa
@@ -68,9 +68,9 @@ uv run ruff check .
 uv run pytest --cov=rastro_publico --cov-report=term-missing
 ```
 
-Resultado local auditado: **113 testes aprovados e 82,97% de cobertura**. A CI em
-`.github/workflows/ci.yml` repete esses gates em Linux. Chamadas reais às fontes e
-payloads de 9 GB não fazem parte da CI.
+A CI em `.github/workflows/ci.yml` executa esses gates em Linux. Chamadas reais às
+fontes e payloads de 9 GB não fazem parte da CI; contagens históricas de testes não
+são usadas como evidência desta revisão.
 
 Para recriar os Jobs, use o Databricks Asset Bundle:
 
@@ -86,8 +86,8 @@ databricks bundle validate -t dev --profile rastro-publico \
 - [arquitetura e operação](docs/03-arquitetura-e-operacao.md);
 - [modelo e métricas](docs/04-modelo-e-metricas.md);
 - [runbook](docs/21-runbook-operacional.md);
-- [KPIs corrigidos](evidence/data/corrected-kpis.json);
-- [auditoria monetária](evidence/data/value-semantics-summary.json);
+- o recálculo de KPIs e a auditoria monetária precisam ser reexecutados; os JSONs
+  citados anteriormente não estão neste pacote;
 - [evidências sanitizadas do Databricks](evidence/databricks/);
 - [índice completo da documentação](docs/00-indice-documentacao.md).
 
@@ -99,7 +99,7 @@ databricks bundle validate -t dev --profile rastro-publico \
 - O runtime local é Spark 4.2; o serverless observado era Spark 4.1.
 - O Query History foi exportado, mas o JSON detalhado do Query Profile não.
 - As capturas antigas do dashboard são históricas. Para divulgação, use o
-  [case study auditado](deliverables/RastroPublico-case-study.pdf).
+  case study somente após regenerá-lo com o novo recálculo.
 
 Relatórios de execução antigos permanecem no repositório como trilha de decisão,
 mas não são fonte de verdade para os KPIs atuais.
