@@ -34,7 +34,10 @@ def _sanitize(value: object) -> object:
     if isinstance(value, list):
         return [_sanitize(item) for item in value]
     if isinstance(value, str):
-        return re.sub(r"/Workspace/Users/[^/]+/", "/Workspace/Users/<redacted>/", value)
+        value = re.sub(
+            r"/Workspace/Users/[^/]+/", "/Workspace/Users/<redacted>/", value
+        )
+        return re.sub(r"/Users/[^/]+/", "/Users/<redacted>/", value)
     return value
 
 
@@ -44,6 +47,9 @@ def main() -> None:
     parser.add_argument("--annual-job-id", default="399795155769573")
     parser.add_argument("--benchmark-job-id", default="79177278313280")
     parser.add_argument("--benchmark-task-run-id", default="757244372360020")
+    parser.add_argument(
+        "--dashboard-id", default="01f182507d3519de8cd5931bef2d613f"
+    )
     parser.add_argument("--output", type=Path, default=Path("evidence/databricks"))
     args = parser.parse_args()
 
@@ -78,6 +84,24 @@ def main() -> None:
         "truncated": output["notebook_output"].get("truncated", False),
     }
     _write(args.output / "benchmark-run.json", evidence)
+
+    dashboard = _cli(args.profile, "lakeview", "get", args.dashboard_id)
+    dashboard_evidence = {
+        key: dashboard.get(key)
+        for key in (
+            "dashboard_id",
+            "display_name",
+            "lifecycle_state",
+            "create_time",
+            "update_time",
+            "warehouse_id",
+            "path",
+        )
+    }
+    dashboard_evidence["serialized_dashboard"] = json.loads(
+        dashboard["serialized_dashboard"]
+    )
+    _write(args.output / "dashboard.json", _sanitize(dashboard_evidence))
 
 
 if __name__ == "__main__":
