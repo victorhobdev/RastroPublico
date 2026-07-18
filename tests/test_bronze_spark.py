@@ -1,22 +1,10 @@
-import os
-import sys
-
 import pytest
-from pyspark.sql import SparkSession
 
 from rastro_publico.coleta.arquivo_bronze import (
     arquivo_ja_carregado,
     preparar_csv_bronze,
     tabela_bronze,
 )
-
-
-@pytest.fixture(scope="module")
-def spark():
-    os.environ["PYSPARK_PYTHON"] = getattr(sys, "_base_executable", sys.executable)
-    sessao = SparkSession.builder.master("local[2]").appName("rastro-publico-test").getOrCreate()
-    yield sessao
-    sessao.stop()
 
 
 def test_prepara_csv_bronze_com_proveniencia(spark, tmp_path) -> None:

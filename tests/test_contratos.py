@@ -1,9 +1,3 @@
-import os
-import sys
-
-import pytest
-from pyspark.sql import SparkSession
-
 from rastro_publico.transformacoes.contratos import (
     filtrar_populacao_contratual_tecnologia,
     transformar_contratos,
@@ -39,14 +33,6 @@ def test_populacao_contratual_restringe_contratos_eventos_e_fornecedores(spark) 
     assert [row.contrato_id for row in contratos_tech.collect()] == ["ct-tech"]
     assert [row.evento_contrato_id for row in eventos_tech.collect()] == ["e-tech"]
     assert [row.fornecedor_id for row in fornecedores_tech.collect()] == ["f-tech"]
-
-
-@pytest.fixture(scope="module")
-def spark():
-    os.environ["PYSPARK_PYTHON"] = getattr(sys, "_base_executable", sys.executable)
-    sessao = SparkSession.builder.master("local[2]").appName("contratos-test").getOrCreate()
-    yield sessao
-    sessao.stop()
 
 
 def test_contrato_tipado_e_fornecedor_pf_pseudonimizado(spark) -> None:

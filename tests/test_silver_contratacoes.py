@@ -1,23 +1,6 @@
-import os
-import sys
-
-import pytest
-from pyspark.sql import SparkSession
 from pyspark.sql.types import StringType, StructField, StructType
 
 from rastro_publico.transformacoes.contratacoes import transformar_contratacoes
-
-
-@pytest.fixture(scope="module")
-def spark():
-    os.environ["PYSPARK_PYTHON"] = getattr(sys, "_base_executable", sys.executable)
-    sessao = (
-        SparkSession.builder.master("local[2]")
-        .appName("silver-contratacoes-test")
-        .getOrCreate()
-    )
-    yield sessao
-    sessao.stop()
 
 
 SCHEMA = StructType(

@@ -1,8 +1,4 @@
-import os
-import sys
-
 import pytest
-from pyspark.sql import SparkSession
 from pyspark.sql.functions import lit
 
 from rastro_publico.transformacoes.nucleo import (
@@ -14,18 +10,6 @@ from rastro_publico.transformacoes.nucleo import (
     transformar_resultados,
     transformar_vinculos_contratacao,
 )
-
-
-@pytest.fixture(scope="module")
-def spark():
-    os.environ["PYSPARK_PYTHON"] = getattr(sys, "_base_executable", sys.executable)
-    sessao = (
-        SparkSession.builder.master("local[2]")
-        .appName("nucleo-compras-test")
-        .getOrCreate()
-    )
-    yield sessao
-    sessao.stop()
 
 
 def test_item_invalido_para_preco_permanece_elegivel_para_relacoes(spark) -> None:

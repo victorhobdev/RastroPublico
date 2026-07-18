@@ -3,6 +3,7 @@
 ## 1. Pré-requisitos
 
 - Windows com PowerShell, Python 3.10–3.12 e Git;
+- Java 20 no teste local atual; Java 21 é usado pela CI Linux;
 - ambiente criado por `uv sync --dev`;
 - Databricks CLI autenticada no perfil `rastro-publico`;
 - acesso ao workspace, Unity Catalog, Jobs, SQL Warehouse e AI/BI;
@@ -21,6 +22,17 @@ databricks current-user me --profile rastro-publico
 No Linux/CI, execute `uv run ruff check .` e
 `uv run pytest --cov=rastro_publico --cov-report=term-missing`. O workflow
 `.github/workflows/ci.yml` fixa Python 3.12 e Java 21 e usa o `uv.lock`.
+
+No Windows, quando o repositório tiver caracteres não ASCII no caminho, use um
+drive virtual e fixe o Spark antes dos testes:
+
+```powershell
+subst R: "C:\Users\Vitinho\Desktop\Projetos\RastroPúblico"
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-20"
+$env:SPARK_HOME = "R:\.venv\Lib\site-packages\pyspark"
+$env:SPARK_LOCAL_IP = "127.0.0.1"
+R:\.venv\Scripts\python.exe -m pytest
+```
 
 ## 2. Parâmetros da execução de referência
 

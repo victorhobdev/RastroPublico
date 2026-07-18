@@ -1,8 +1,4 @@
-import os
-import sys
-
 import pytest
-from pyspark.sql import SparkSession
 
 from rastro_publico.transformacoes.contexto import (
     enriquecer_fornecedores_contexto,
@@ -10,16 +6,6 @@ from rastro_publico.transformacoes.contexto import (
     transformar_empresas_cnpj,
     transformar_sancoes,
 )
-
-
-@pytest.fixture(scope="module")
-def spark():
-    os.environ["PYSPARK_PYTHON"] = getattr(sys, "_base_executable", sys.executable)
-    sessao = (
-        SparkSession.builder.master("local[2]").appName("contexto-test").getOrCreate()
-    )
-    yield sessao
-    sessao.stop()
 
 
 def test_contexto_cnpj_qsa_e_sancoes_preserva_semantica(spark) -> None:

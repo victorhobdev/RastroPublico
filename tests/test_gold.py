@@ -1,8 +1,4 @@
-import os
-import sys
-
 import pytest
-from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
 from rastro_publico.transformacoes.gold import (
@@ -15,14 +11,6 @@ from rastro_publico.transformacoes.gold import (
     calcular_rede_orgao_fornecedor,
     calcular_variacao_precos,
 )
-
-
-@pytest.fixture(scope="module")
-def spark():
-    os.environ["PYSPARK_PYTHON"] = getattr(sys, "_base_executable", sys.executable)
-    sessao = SparkSession.builder.master("local[2]").appName("gold-test").getOrCreate()
-    yield sessao
-    sessao.stop()
 
 
 def entradas(spark):

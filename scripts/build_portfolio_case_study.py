@@ -330,7 +330,7 @@ def build() -> Path:
         ("KPIs corrigidos", "evidence/data/corrected-kpis.json", "Recalcula população tecnológica e recorrência"),
         ("Semântica monetária", "evidence/data/value-semantics-summary.json", "Explica por que valores não são publicados"),
         ("Jobs e benchmark", "databricks.yml + evidence/databricks/", "Parâmetros, run e métricas sanitizadas"),
-        ("Contratos executáveis", "tests/", "109 testes aprovados na auditoria modular"),
+        ("Contratos executáveis", "tests/", "113 testes · 82,97% de cobertura"),
         ("Ambiente limpo", ".github/workflows/ci.yml", "uv.lock, lint, suíte e cobertura mínima"),
     ]
     for evidence, location, proof in rows:
