@@ -1,0 +1,252 @@
+import hashlib
+import hmac
+
+from pyspark.sql import DataFrame, Window
+from pyspark.sql.functions import (
+    col,
+    concat,
+    concat_ws,
+    countDistinct,
+    lit,
+    lower,
+    regexp_replace,
+    row_number,
+    sha2,
+    struct,
+    to_json,
+    to_timestamp,
+    trim,
+    udf,
+    when,
+)
+from pyspark.sql.types import DecimalType, StringType
+
+
+def pseudonimizar_identificador(segredo: str, valor: str) -> str:
+    return hmac.new(segredo.encode(), valor.encode(), hashlib.sha256).hexdigest()
+
+
+def transformar_itens(bronze: DataFrame) -> tuple[DataFrame, DataFrame, DataFrame]:
+    tipadas = (
+        bronze.select(
+            trim("id_compra_item").alias("id_origem_item"),
+            trim("numero_controle_PNCP_compra").alias("numero_controle_pncp"),
+            trim("numero_item_pncp").alias("numero_item"),
+            concat_ws(
+                " ", trim("descricao_resumida"), trim("descricao_detalhada")
+            ).alias("descricao"),
+            trim("material_ou_servico").alias("material_ou_servico"),
+            col("quantidade").cast(DecimalType(38, 6)).alias("quantidade"),
+            trim("unidade_medida").alias("unidade_medida"),
+            col("valor_unitario_estimado")
+            .cast(DecimalType(38, 4))
+            .alias("valor_unitario_estimado"),
+            col("valor_total").cast(DecimalType(38, 2)).alias("valor_total"),
+            to_timestamp("data_atualizacao_pncp").alias("atualizado_em"),
+            col("_source_file_id").alias("source_file_id"),
+        )
+        .withColumn(
+            "contratacao_id",
+            sha2(concat(lit("pncp|"), lower("numero_controle_pncp")), 256),
+        )
+        .withColumn(
+            "item_id",
+            sha2(concat_ws("|", "contratacao_id", "numero_item"), 256),
+        )
+        .withColumn(
+            "motivo_quarentena",
+            when(col("numero_controle_pncp").isNull(), "contratacao_ausente")
+            .when(col("numero_item").isNull(), "numero_item_ausente")
+            .when(
+                col("quantidade").isNull() | (col("quantidade") <= 0),
+                "quantidade_nao_positiva",
+            )
+            .when(
+                col("unidade_medida").isNull() | (col("unidade_medida") == ""),
+                "unidade_ausente",
+            )
+            .when(col("valor_unitario_estimado") < 0, "valor_unitario_negativo")
+            .when(col("valor_total") < 0, "valor_total_negativo")
+            .when(col("atualizado_em").isNull(), "data_atualizacao_invalida"),
+        )
+    )
+    quarentena = tipadas.where(col("motivo_quarentena").isNotNull())
+    validas = tipadas.where(col("motivo_quarentena").isNull()).drop("motivo_quarentena")
+    correntes, conflitos = _separar_versoes(
+        validas,
+        ["item_id", "atualizado_em"],
+        [
+            "numero_controle_pncp",
+            "numero_item",
+            "descricao",
+            "material_ou_servico",
+            "quantidade",
+            "unidade_medida",
+            "valor_unitario_estimado",
+            "valor_total",
+            "atualizado_em",
+        ],
+        "item_id",
+    )
+    return correntes, quarentena, conflitos
+
+
+def transformar_resultados(
+    bronze: DataFrame, segredo: str
+) -> tuple[DataFrame, DataFrame, DataFrame, DataFrame]:
+    pseudonimizar = udf(
+        lambda valor: pseudonimizar_identificador(segredo, valor) if valor else None,
+        StringType(),
+    )
+    tipadas = (
+        bronze.select(
+            trim("srk_item_resultado").alias("id_origem_resultado"),
+            trim("id_compra_item").alias("id_origem_item"),
+            trim("numero_controle_PNCP_compra").alias("numero_controle_pncp"),
+            trim("numero_item_pncp").alias("numero_item"),
+            trim("sequencial_resultado").alias("sequencial_resultado"),
+            trim("tipo_pessoa").alias("tipo_pessoa"),
+            trim("codigo_pais").alias("pais"),
+            regexp_replace("ni_fornecedor", r"\D", "").alias(
+                "identificador_normalizado"
+            ),
+            trim("nome_razao_social_fornecedor").alias("nome_fornecedor"),
+            col("quantidade_homologada")
+            .cast(DecimalType(38, 6))
+            .alias("quantidade_homologada"),
+            col("valor_unitario_homologado")
+            .cast(DecimalType(38, 4))
+            .alias("valor_unitario_homologado"),
+            col("valor_total_homologado")
+            .cast(DecimalType(38, 2))
+            .alias("valor_total_homologado"),
+            to_timestamp("data_atualizacao_pncp").alias("atualizado_em"),
+            col("_source_file_id").alias("source_file_id"),
+        )
+        .withColumn(
+            "contratacao_id",
+            sha2(concat(lit("pncp|"), lower("numero_controle_pncp")), 256),
+        )
+        .withColumn(
+            "item_id", sha2(concat_ws("|", "contratacao_id", "numero_item"), 256)
+        )
+        .withColumn(
+            "resultado_id",
+            sha2(concat_ws("|", "item_id", "sequencial_resultado"), 256),
+        )
+        .withColumn(
+            "chave_fornecedor",
+            concat_ws("|", "tipo_pessoa", "pais", "identificador_normalizado"),
+        )
+        .withColumn(
+            "fornecedor_id",
+            when(
+                col("tipo_pessoa") == "PF", pseudonimizar("chave_fornecedor")
+            ).otherwise(sha2("chave_fornecedor", 256)),
+        )
+        .withColumn(
+            "identificador_publico",
+            when(col("tipo_pessoa") != "PF", col("identificador_normalizado")),
+        )
+        .withColumn(
+            "motivo_quarentena",
+            when(col("item_id").isNull(), "item_ausente")
+            .when(
+                col("identificador_normalizado").isNull()
+                | (col("identificador_normalizado") == ""),
+                "fornecedor_ausente",
+            )
+            .when(col("quantidade_homologada") < 0, "quantidade_negativa")
+            .when(col("valor_unitario_homologado") < 0, "valor_unitario_negativo")
+            .when(col("valor_total_homologado") < 0, "valor_total_negativo")
+            .when(col("atualizado_em").isNull(), "data_atualizacao_invalida"),
+        )
+    )
+    quarentena = tipadas.where(col("motivo_quarentena").isNotNull())
+    validas = tipadas.where(col("motivo_quarentena").isNull()).drop("motivo_quarentena")
+    correntes, conflitos = _separar_versoes(
+        validas,
+        ["resultado_id", "atualizado_em"],
+        [
+            "item_id",
+            "sequencial_resultado",
+            "fornecedor_id",
+            "quantidade_homologada",
+            "valor_unitario_homologado",
+            "valor_total_homologado",
+            "atualizado_em",
+        ],
+        "resultado_id",
+    )
+    resultados = correntes.drop(
+        "identificador_normalizado", "identificador_publico", "chave_fornecedor"
+    )
+    fornecedores = correntes.select(
+        "fornecedor_id",
+        "tipo_pessoa",
+        "pais",
+        "identificador_publico",
+        "nome_fornecedor",
+        "atualizado_em",
+        "source_file_id",
+    ).dropDuplicates(["fornecedor_id"])
+    campos_sensiveis = ["identificador_normalizado", "chave_fornecedor"]
+    quarentena = quarentena.drop(*campos_sensiveis)
+    conflitos = conflitos.drop(*campos_sensiveis)
+    return resultados, fornecedores, quarentena, conflitos
+
+
+def classificar_equipamentos(itens: DataFrame) -> DataFrame:
+    texto = lower(col("descricao"))
+    categoria = (
+        when(
+            texto.rlike(r"\b(notebook|computador|desktop|microcomputador)\b"),
+            "computador_notebook",
+        )
+        .when(texto.rlike(r"\bmonitor\b"), "monitor")
+        .when(
+            texto.rlike(r"\b(impressora|scanner|multifuncional)\b"),
+            "impressora_scanner",
+        )
+        .when(texto.rlike(r"\bservidor\b"), "servidor")
+        .when(
+            texto.rlike(r"\b(switch|roteador|access point|comutador)\b"),
+            "equipamento_rede",
+        )
+        .otherwise("incerto")
+    )
+    return itens.withColumn("categoria_tecnologia", categoria).withColumn(
+        "versao_regra", lit("equipamentos_v1")
+    )
+
+
+def _separar_versoes(
+    validas: DataFrame,
+    chaves_conflito: list[str],
+    campos_conteudo: list[str],
+    chave_entidade: str,
+) -> tuple[DataFrame, DataFrame]:
+    com_hash = validas.withColumn(
+        "hash_conteudo_entidade",
+        sha2(
+            to_json(struct(*campos_conteudo), options={"ignoreNullFields": "false"}),
+            256,
+        ),
+    )
+    empates = (
+        com_hash.groupBy(*chaves_conflito)
+        .agg(countDistinct("hash_conteudo_entidade").alias("total_hashes"))
+        .where("total_hashes > 1")
+        .drop("total_hashes")
+    )
+    conflitos = com_hash.join(empates, chaves_conflito, "inner")
+    elegiveis = com_hash.join(empates, chaves_conflito, "left_anti")
+    janela = Window.partitionBy(chave_entidade).orderBy(
+        col("atualizado_em").desc(), col("source_file_id").desc()
+    )
+    correntes = (
+        elegiveis.withColumn("_ordem", row_number().over(janela))
+        .where("_ordem = 1")
+        .drop("_ordem")
+    )
+    return correntes, conflitos
