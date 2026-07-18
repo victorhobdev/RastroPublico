@@ -30,6 +30,10 @@ repeticoes = int(dbutils.widgets.get("repeticoes"))
 if repeticoes != 4:
     raise ValueError("benchmark inicial exige um aquecimento e tres medidas")
 
+# Evita que o cache de resultado transforme repetições em leituras do resultado
+# anterior. O cache de I/O do engine permanece parte do ambiente medido.
+spark.sql("SET use_cached_result = false")
+
 strategies = ["natural", "broadcast", "merge"] if strategy == "all" else [strategy]
 initial_plans = {}
 for current_strategy in strategies:
