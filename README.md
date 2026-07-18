@@ -82,6 +82,7 @@ databricks bundle validate -t dev --profile rastro-publico \
 ## Mapa de evidências
 
 - [auditoria e baseline atual](docs/25-auditoria-e-baseline-portfolio.md);
+- [parecer final de portfólio](docs/26-parecer-final-portfolio.md);
 - [arquitetura e operação](docs/03-arquitetura-e-operacao.md);
 - [modelo e métricas](docs/04-modelo-e-metricas.md);
 - [runbook](docs/21-runbook-operacional.md);

@@ -8,11 +8,12 @@ corrigido.
 
 1. `25-auditoria-e-baseline-portfolio.md` — veredito atual, correções, evidências
    e pendências;
-2. `01-visao-e-escopo.md` — problema, recorte e limites;
-3. `03-arquitetura-e-operacao.md` — fluxo executado e semântica das camadas;
-4. `04-modelo-e-metricas.md` — grãos, definições e baseline corrigida;
-5. `21-runbook-operacional.md` — reprodução local e no Databricks;
-6. `23-guia-portfolio-e-entrevista.md` — alegações permitidas e roteiro.
+2. `26-parecer-final-portfolio.md` — decisão de divulgação e nota por dimensão;
+3. `01-visao-e-escopo.md` — problema, recorte e limites;
+4. `03-arquitetura-e-operacao.md` — fluxo executado e semântica das camadas;
+5. `04-modelo-e-metricas.md` — grãos, definições e baseline corrigida;
+6. `21-runbook-operacional.md` — reprodução local e no Databricks;
+7. `23-guia-portfolio-e-entrevista.md` — alegações permitidas e roteiro.
 
 ## Evidências verificáveis
 
