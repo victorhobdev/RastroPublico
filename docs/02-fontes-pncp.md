@@ -117,7 +117,7 @@ O escopo usa uma **janela móvel de 12 meses encerrada em D-1**. O job recebe `d
 
 O bootstrap será quebrado em janelas menores. O tamanho inicial será de um dia por modalidade, com `tamanhoPagina=50`; poderá aumentar somente depois de medir páginas, duração, erros e tamanho dos payloads. O valor 50 foi aceito e 100 foi rejeitado com `400` nos testes realizados.
 
-Para atualizações diárias, será usada uma sobreposição inicial de dias ainda a definir por evidência. O watermark só avança após conclusão e validação de todas as páginas da janela.
+Para atualizações diárias, o Bloco 5 fixou uma sobreposição inicial de três dias. A escolha é operacional e provisória: será reavaliada após observar pelo menos 30 dias de atraso de correções reais. O watermark só avança após conclusão e validação integral da janela.
 
 ## 7. Estratégia para todas as modalidades
 

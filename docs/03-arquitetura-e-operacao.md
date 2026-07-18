@@ -211,6 +211,8 @@ Schemas e colunas são previsões. O Bloco 0 confirmou campos e chaves candidata
 9. executar validações;
 10. avançar watermark somente após sucesso integral da coleta, transferência e materialização.
 
+A sobreposição inicial é de três dias. Enquanto o volume atual permanecer pequeno, o núcleo Silver é reconstruído integralmente a partir da Bronze histórica; MERGE por chaves afetadas só será adotado se o benchmark do Bloco 7 demonstrar necessidade e equivalência lógica.
+
 ### 6.3 Parâmetros mínimos
 
 - `data_inicio`;
