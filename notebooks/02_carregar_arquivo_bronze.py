@@ -18,7 +18,11 @@ if not arquivo or not manifesto or not source_root:
     raise ValueError("arquivo, manifesto e source_root sao obrigatorios")
 sys.path.insert(0, source_root)
 
-from rastro_publico.coleta.arquivo_bronze import arquivo_ja_carregado, preparar_csv_bronze
+from rastro_publico.coleta.arquivo_bronze import (
+    arquivo_ja_carregado,
+    preparar_csv_bronze,
+    tabela_bronze,
+)
 from rastro_publico.coleta.persistencia import append_delta_idempotente
 
 
@@ -44,7 +48,7 @@ metadados = {
     "dataset_origem": documento["dataset_origem"],
     "coletado_em_utc": documento["coletado_em_utc"],
 }
-tabela_dados = "workspace.bronze.contratacoes_raw"
+tabela_dados = tabela_bronze(documento["dataset_origem"])
 entrada = preparar_csv_bronze(spark, arquivo, metadados)
 linhas_entrada = entrada.count()
 if arquivo_ja_carregado(spark, tabela_dados, source_file_id):

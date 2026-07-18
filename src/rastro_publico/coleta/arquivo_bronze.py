@@ -1,6 +1,19 @@
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col, lit
 
+TABELAS_BRONZE = {
+    "VW_FT_PNCP_COMPRA": "workspace.bronze.contratacoes_raw",
+    "VW_FT_PNCP_COMPRA_ITEM": "workspace.bronze.itens_raw",
+    "VW_DM_PNCP_ITEM_RESULTADO": "workspace.bronze.resultados_raw",
+}
+
+
+def tabela_bronze(dataset_origem: str) -> str:
+    try:
+        return TABELAS_BRONZE[dataset_origem]
+    except KeyError as erro:
+        raise ValueError(f"dataset nao suportado: {dataset_origem}") from erro
+
 
 def preparar_csv_bronze(
     spark: SparkSession, caminho: str, metadados: dict[str, str]
